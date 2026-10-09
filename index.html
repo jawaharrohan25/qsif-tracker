@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>qSIF Equity L-S Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single working column. Position summary on top, NAV chart in the middle, record table and import below. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --ink: #12202b;
+  --muted: #5b6b78;
+  --line: #d5dce2;
+  --accent: #1f3fd1;
+  --accent-soft: #e3e8fb;
+  --gain: #0d7a4b;
+  --loss: #c0392b;
+  --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1620; --surface: #16212d; --ink: #e8eef3; --muted: #8fa1af; --line: #2a3a49;
+    --accent: #7f95ff; --accent-soft: #1f2b4a; --gain: #4cc38a; --loss: #ff7b6b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1620; --surface: #16212d; --ink: #e8eef3; --muted: #8fa1af; --line: #2a3a49;
+  --accent: #7f95ff; --accent-soft: #1f2b4a; --gain: #4cc38a; --loss: #ff7b6b; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; padding: 24px 16px 48px; }
+.wrap { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1, h2 { font-family: var(--display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(1.6rem, 4.5vw, 2.2rem); line-height: 1.1; }
+h2 { font-size: 1.1rem; }
+.eyebrow { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chip { font-family: var(--mono); font-size: 0.74rem; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px 24px; }
+.num { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.num .v { font-family: var(--mono); font-size: 1.55rem; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.num .s { font-size: 0.8rem; color: var(--muted); }
+.gain { color: var(--gain); } .loss { color: var(--loss); }
+.inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+input, textarea, button { font: inherit; color: var(--ink); }
+input, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 0.9rem; min-width: 0; width: 100%; }
+textarea { min-height: 110px; resize: vertical; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button { cursor: pointer; background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 8px 14px; font-weight: 500; }
+:root[data-theme="dark"] button.primary, :root:not([data-theme="light"]) button.primary { color: #0e1620; }
+button.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+button.ghost[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.ranges { display: flex; gap: 6px; flex-wrap: wrap; }
+.ranges button { padding: 5px 11px; font-size: 0.82rem; }
+.chartbox { position: relative; width: 100%; }
+svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+svg text { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+#tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font-family: var(--mono); font-size: 0.78rem; padding: 6px 9px; border-radius: 6px; transform: translate(-50%, -115%); white-space: nowrap; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 0.88rem; white-space: nowrap; }
+th { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+td.n, th.n { text-align: right; font-family: var(--mono); }
+td button { padding: 2px 8px; font-size: 0.78rem; }
+.note { font-size: 0.82rem; color: var(--muted); margin: 0; }
+.note a { color: var(--accent); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+#msg { font-size: 0.82rem; min-height: 1.2em; }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Quant Mutual Fund · Specialized Investment Fund</div>
+    <h1>qSIF Equity Long-Short Fund</h1>
+    <div class="chips"><span class="chip">Direct · Growth</span><span class="chip">ISIN INF966L30019</span><span class="chip">Launched 8 Oct 2025</span><span class="chip">Min. ₹10 lakh</span></div>
+  </header>
+
+  <section class="panel" aria-labelledby="pos">
+    <h2 id="pos">Your investment</h2>
+    <div class="nums">
+      <div class="num"><span class="eyebrow">Latest NAV</span><span class="v" id="nav">–</span><span class="s" id="navDate">–</span></div>
+      <div class="num"><span class="eyebrow">Current value</span><span class="v" id="val">–</span><span class="s" id="units">–</span></div>
+      <div class="num"><span class="eyebrow">Gain / loss</span><span class="v" id="gain">–</span><span class="s" id="gainPct">–</span></div>
+      <div class="num"><span class="eyebrow">Below peak NAV</span><span class="v" id="dd">–</span><span class="s" id="peak">–</span></div>
+    </div>
+    <div class="inputs">
+      <label for="amt">Units held<input id="amt" inputmode="decimal" placeholder="e.g. 90000.000"></label>
+      <label for="pnav">Purchase NAV (₹)<input id="pnav" inputmode="decimal" placeholder="e.g. 11.05"></label>
+      <label for="pdate">Purchase date (optional)<input id="pdate" type="date" value=""></label>
+    </div>
+    <p class="note" id="inputNote">Cost is units × purchase NAV. Add your purchase date to see a yearly rate.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="ch">
+    <div class="bar">
+      <h2 id="ch">NAV history</h2>
+      <div class="ranges" role="group" aria-label="Date range">
+        <button class="ghost" data-r="30" aria-pressed="false">1M</button>
+        <button class="ghost" data-r="90" aria-pressed="false">3M</button>
+        <button class="ghost" data-r="180" aria-pressed="false">6M</button>
+        <button class="ghost" data-r="0" aria-pressed="true">All</button>
+      </div>
+    </div>
+    <div class="chartbox"><svg id="chart" viewBox="0 0 760 300" role="img" aria-label="NAV over time"></svg><div id="tip" hidden></div></div>
+    <p class="note" id="chartNote"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="tb">
+    <h2 id="tb">NAV records</h2>
+    <div class="tablewrap"><table><thead><tr><th>Date</th><th class="n">NAV (₹)</th><th class="n">Value of your units (₹)</th><th>Source</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+    <p class="note">Dates marked "public page" are single readings collected from fund data sites, so the series is sparse. Add the daily series below to fill the chart.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="im">
+    <h2 id="im">Add NAVs</h2>
+    <div class="row">
+      <label for="ad" style="flex:1 1 150px">Date<input id="ad" type="date"></label>
+      <label for="an" style="flex:1 1 130px">NAV (₹)<input id="an" inputmode="decimal" placeholder="10.6329"></label>
+      <button class="primary" id="addBtn" style="align-self:flex-end">Add NAV</button>
+    </div>
+    <label for="bulk">Paste the full history, one line per day (for example 08-Oct-2026, 10.6329)<textarea id="bulk" placeholder="09-Oct-2026	10.6900&#10;08-Oct-2026	10.6329"></textarea></label>
+    <div class="row"><button class="primary" id="bulkBtn">Import pasted NAVs</button><button class="ghost" id="clearBtn">Remove my added NAVs</button><span id="msg" role="status"></span></div>
+    <p class="note">Official daily NAVs are on the <a href="https://www.qsif.com/nav/historical_nav" target="_blank" rel="noopener">qSIF Historical NAV page</a>. Pick the Equity Long-Short Fund, Regular Growth, copy the table and paste it here. Entries stay in this browser.</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  var SEED = [
+    { d: "2025-10-08", n: 10.0000, s: "Launch NAV (₹10 unit price)" },
+    { d: "2026-10-07", n: 11.04, s: "public page (2 decimals)" },
+    { d: "2026-10-08", n: 10.7891, s: "public page" }
+  ];
+  var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var $ = function (id) { return document.getElementById(id); };
+  var user = [], range = 0;
+  try { user = JSON.parse(localStorage.getItem("qsif-direct-nav-user") || "[]") || []; } catch (e) { user = []; }
+  try {
+    var st = JSON.parse(localStorage.getItem("qsif-direct-pos") || "null");
+    if (st) { $("amt").value = st.a; $("pdate").value = st.d || ""; $("pnav").value = st.n; }
+  } catch (e) {}
+
+  function ms(d) { var p = d.split("-"); return Date.UTC(+p[0], +p[1] - 1, +p[2]); }
+  function fmtDate(d) { var p = d.split("-"); return +p[2] + " " + MON[+p[1] - 1] + " " + p[0]; }
+  function inr(x) { return "₹" + Math.round(x).toLocaleString("en-IN"); }
+  function signedInr(x) { return (x < 0 ? "−" : "+") + inr(Math.abs(x)); }
+  function pct(x) { return (x < 0 ? "−" : "+") + Math.abs(x * 100).toFixed(2) + "%"; }
+  function all() {
+    var m = {};
+    SEED.forEach(function (r) { m[r.d] = r; });
+    user.forEach(function (r) { m[r.d] = { d: r.d, n: r.n, s: "added by you", u: true }; });
+    return Object.keys(m).sort().map(function (k) { return m[k]; });
+  }
+  function pos() {
+    var u = parseFloat(String($("amt").value).replace(/[^0-9.]/g, ""));
+    var n = parseFloat($("pnav").value);
+    return { a: u * n, n: n, d: $("pdate").value, u: u };
+  }
+  function parseDate(t) {
+    var m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
+    m = t.match(/^(\d{1,2})[-\/ ]([A-Za-z]{3})[a-z]*[-\/ ](\d{4})$/);
+    if (m) { var i = MON.map(function (x) { return x.toLowerCase(); }).indexOf(m[2].toLowerCase()); if (i < 0) return null; return m[3] + "-" + ("0" + (i + 1)).slice(-2) + "-" + ("0" + m[1]).slice(-2); }
+    m = t.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+    if (m) return m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2);
+    return null;
+  }
+  function save() { try { localStorage.setItem("qsif-direct-nav-user", JSON.stringify(user)); } catch (e) {} }
+  function savePos() { var p = pos(); try { localStorage.setItem("qsif-direct-pos", JSON.stringify({ a: $("amt").value, d: p.d, n: $("pnav").value })); } catch (e) {} }
+
+  function render() {
+    var data = all(), p = pos(), last = data[data.length - 1];
+    var ok = p.a > 0 && p.n > 0;
+    $("nav").textContent = "₹" + last.n.toFixed(4);
+    $("navDate").textContent = "as on " + fmtDate(last.d);
+    var peak = data.reduce(function (b, r) { return r.n > b.n ? r : b; }, data[0]);
+    var dd = last.n / peak.n - 1;
+    $("dd").textContent = (dd === 0 ? "0.00%" : pct(dd)); $("dd").className = "v " + (dd < 0 ? "loss" : "");
+    $("peak").textContent = "peak ₹" + peak.n.toFixed(4) + " on " + fmtDate(peak.d);
+    if (ok) {
+      var v = p.u * last.n, g = v - p.a, gp = g / p.a;
+      $("val").textContent = inr(v);
+      $("units").textContent = p.u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + " units · cost " + inr(p.a);
+      $("gain").textContent = signedInr(g); $("gain").className = "v " + (g < 0 ? "loss" : "gain");
+      var days = p.d ? (ms(last.d) - ms(p.d)) / 864e5 : 0, extra = "";
+      if (days >= 30) extra = " · " + pct(Math.pow(v / p.a, 365 / days) - 1) + " a year";
+      $("gainPct").textContent = pct(gp) + " on cost" + (p.d ? " since " + fmtDate(p.d) : "") + extra;
+    } else { $("val").textContent = "–"; $("gain").textContent = "–"; $("units").textContent = "Enter amount and NAV"; $("gainPct").textContent = ""; }
+    rows(data, p, ok); chart(data);
+  }
+
+  function rows(data, p, ok) {
+    var h = "";
+    data.slice().reverse().forEach(function (r) {
+      h += "<tr><td>" + fmtDate(r.d) + "</td><td class='n'>" + r.n.toFixed(4) + "</td><td class='n'>" + (ok ? Math.round(p.u * r.n).toLocaleString("en-IN") : "–") + "</td><td>" + r.s + "</td><td>" + (r.u ? "<button class='ghost' data-del='" + r.d + "'>Remove</button>" : "") + "</td></tr>";
+    });
+    $("rows").innerHTML = h;
+  }
+
+  var pts = [];
+  function chart(data) {
+    var W = 760, H = 300, L = 52, R = 16, T = 16, B = 34;
+    var last = ms(data[data.length - 1].d);
+    var vis = range ? data.filter(function (r) { return ms(r.d) >= last - range * 864e5; }) : data;
+    if (vis.length < 2) { var idx = Math.max(0, data.length - 2); vis = data.slice(idx); }
+    var x0 = ms(vis[0].d), x1 = ms(vis[vis.length - 1].d); if (x1 === x0) x1 = x0 + 864e5;
+    var lo = Math.min.apply(null, vis.map(function (r) { return r.n; })), hi = Math.max.apply(null, vis.map(function (r) { return r.n; }));
+    var pad = (hi - lo) * 0.15 || 0.2; lo = Math.floor((lo - pad) * 4) / 4; hi = Math.ceil((hi + pad) * 4) / 4;
+    var X = function (t) { return L + (t - x0) / (x1 - x0) * (W - L - R); };
+    var Y = function (v) { return T + (hi - v) / (hi - lo) * (H - T - B); };
+    var s = "";
+    var step = (hi - lo) / 4;
+    for (var i = 0; i <= 4; i++) {
+      var yv = lo + step * i, yy = Y(yv);
+      s += "<line x1='" + L + "' x2='" + (W - R) + "' y1='" + yy + "' y2='" + yy + "' stroke='var(--line)' stroke-width='1'/><text x='" + (L - 8) + "' y='" + (yy + 4) + "' text-anchor='end'>" + yv.toFixed(2) + "</text>";
+    }
+    var nt = 4;
+    for (var j = 0; j <= nt; j++) {
+      var t = x0 + (x1 - x0) * j / nt, dt = new Date(t);
+      s += "<text x='" + X(t) + "' y='" + (H - 10) + "' text-anchor='" + (j === 0 ? "start" : j === nt ? "end" : "middle") + "'>" + dt.getUTCDate() + " " + MON[dt.getUTCMonth()] + " " + String(dt.getUTCFullYear()).slice(2) + "</text>";
+    }
+    var p = pos();
+    if (p.n > 0 && p.n >= lo && p.n <= hi) {
+      s += "<line x1='" + L + "' x2='" + (W - R) + "' y1='" + Y(p.n) + "' y2='" + Y(p.n) + "' stroke='var(--muted)' stroke-width='1' stroke-dasharray='4 4'/><text x='" + (W - R) + "' y='" + (Y(p.n) - 5) + "' text-anchor='end'>your buy NAV " + p.n.toFixed(2) + "</text>";
+    }
+    pts = vis.map(function (r) { return { x: X(ms(r.d)), y: Y(r.n), r: r }; });
+    var path = pts.map(function (q, i) { return (i ? "L" : "M") + q.x.toFixed(1) + " " + q.y.toFixed(1); }).join(" ");
+    var area = path + " L" + pts[pts.length - 1].x.toFixed(1) + " " + (H - B) + " L" + pts[0].x.toFixed(1) + " " + (H - B) + " Z";
+    s += "<path d='" + area + "' fill='var(--accent)' fill-opacity='0.10'/><path d='" + path + "' fill='none' stroke='var(--accent)' stroke-width='2' stroke-linejoin='round'/>";
+    var dense = pts.length > 40;
+    pts.forEach(function (q, i) { if (!dense || i === pts.length - 1) s += "<circle cx='" + q.x.toFixed(1) + "' cy='" + q.y.toFixed(1) + "' r='" + (i === pts.length - 1 ? 5 : 3.5) + "' fill='var(--surface)' stroke='var(--accent)' stroke-width='2'/>"; });
+    s += "<circle id='hov' r='5' fill='var(--accent)' cx='-10' cy='-10'/>";
+    $("chart").innerHTML = s;
+    $("chartNote").textContent = vis.length + " NAV " + (vis.length === 1 ? "reading" : "readings") + " shown" + (vis.length < 20 ? ". Lines connect the readings, so moves between them are not shown." : ".");
+  }
+
+  var svg = $("chart"), tip = $("tip");
+  function hover(ev) {
+    if (!pts.length) return;
+    var b = svg.getBoundingClientRect(), mx = (ev.clientX - b.left) / b.width * 760, best = pts[0];
+    pts.forEach(function (q) { if (Math.abs(q.x - mx) < Math.abs(best.x - mx)) best = q; });
+    var h = $("hov"); h.setAttribute("cx", best.x); h.setAttribute("cy", best.y);
+    tip.hidden = false; tip.textContent = fmtDate(best.r.d) + " · ₹" + best.r.n.toFixed(4);
+    tip.style.left = (best.x / 760 * b.width) + "px"; tip.style.top = (best.y / 300 * b.height) + "px";
+  }
+  svg.addEventListener("pointermove", hover);
+  svg.addEventListener("pointerleave", function () { tip.hidden = true; var h = $("hov"); if (h) { h.setAttribute("cx", -10); h.setAttribute("cy", -10); } });
+
+  document.querySelectorAll(".ranges button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      range = +b.getAttribute("data-r");
+      document.querySelectorAll(".ranges button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      render();
+    });
+  });
+  ["amt", "pdate", "pnav"].forEach(function (id) { $(id).addEventListener("input", function () { savePos(); render(); }); });
+
+  function msg(t, bad) { $("msg").textContent = t; $("msg").className = bad ? "loss" : "gain"; }
+  function upsert(d, n) { user = user.filter(function (r) { return r.d !== d; }); user.push({ d: d, n: n }); }
+  $("addBtn").addEventListener("click", function () {
+    var d = $("ad").value, n = parseFloat($("an").value);
+    if (!d || !(n > 0)) { msg("Enter a date and a NAV above zero.", true); return; }
+    upsert(d, n); save(); render(); msg("Added " + fmtDate(d) + ".", false); $("an").value = "";
+  });
+  $("bulkBtn").addEventListener("click", function () {
+    var ok = 0, bad = 0;
+    $("bulk").value.split(/\r?\n/).forEach(function (line) {
+      line = line.trim(); if (!line) return;
+      var parts = line.split(/[\t,;]+|\s{2,}/).map(function (x) { return x.trim(); }).filter(Boolean);
+      if (parts.length < 2) parts = line.split(/\s+/);
+      var d = null, n = NaN;
+      for (var i = 0; i < parts.length; i++) { var dd = parseDate(parts[i]); if (dd && !d) d = dd; else if (!isNaN(parseFloat(parts[i])) && isNaN(n)) n = parseFloat(parts[i]); }
+      if (d && n > 0) { upsert(d, n); ok++; } else bad++;
+    });
+    save(); render();
+    msg(ok + " imported" + (bad ? ", " + bad + " lines skipped" : "") + ".", ok === 0);
+  });
+  $("clearBtn").addEventListener("click", function () { user = []; save(); render(); msg("Removed.", false); });
+  $("rows").addEventListener("click", function (e) {
+    var d = e.target.getAttribute && e.target.getAttribute("data-del");
+    if (d) { user = user.filter(function (r) { return r.d !== d; }); save(); render(); }
+  });
+  render();
+})();
+</script>
+</body>
+</html>
