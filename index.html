@@ -19,6 +19,9 @@
   --accent-soft: #e3e8fb;
   --gain: #0d7a4b;
   --loss: #c0392b;
+  --c1: #1f3fd1;
+  --c2: #0d9488;
+  --c3: #d97706;
   --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
   --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -26,12 +29,12 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0e1620; --surface: #16212d; --ink: #e8eef3; --muted: #8fa1af; --line: #2a3a49;
-    --accent: #7f95ff; --accent-soft: #1f2b4a; --gain: #4cc38a; --loss: #ff7b6b; color-scheme: dark;
+    --accent: #7f95ff; --accent-soft: #1f2b4a; --gain: #4cc38a; --loss: #ff7b6b; --c1: #7f95ff; --c2: #3cc7b6; --c3: #f0a64a; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e1620; --surface: #16212d; --ink: #e8eef3; --muted: #8fa1af; --line: #2a3a49;
-  --accent: #7f95ff; --accent-soft: #1f2b4a; --gain: #4cc38a; --loss: #ff7b6b; color-scheme: dark;
+  --accent: #7f95ff; --accent-soft: #1f2b4a; --gain: #4cc38a; --loss: #ff7b6b; --c1: #7f95ff; --c2: #3cc7b6; --c3: #f0a64a; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; padding: 24px 16px 48px; }
@@ -79,6 +82,14 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
 .note a { color: var(--accent); }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 #msg { font-size: 0.82rem; min-height: 1.2em; }
+.stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.alloc { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--line); }
+.alloc div { height: 100%; }
+.legend { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.85rem; }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+tr.total td { font-weight: 600; border-top: 2px solid var(--line); border-bottom: 0; }
+button.link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font-weight: 500; }
 </style>
 
 </head>
@@ -91,6 +102,28 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
     <div class="chips" id="chips"></div>
   </header>
 
+  <div class="stack" id="portView" hidden>
+    <section class="panel" aria-labelledby="ptitle">
+      <h2 id="ptitle">Total portfolio</h2>
+      <div class="nums">
+        <div class="num"><span class="eyebrow">Current value</span><span class="v" id="pVal">–</span><span class="s" id="pDates">–</span></div>
+        <div class="num"><span class="eyebrow">Invested</span><span class="v" id="pCost">–</span><span class="s" id="pHeld">–</span></div>
+        <div class="num"><span class="eyebrow">Gain / loss</span><span class="v" id="pGain">–</span><span class="s" id="pGainPct">–</span></div>
+      </div>
+      <div>
+        <div class="eyebrow">Share of portfolio value</div>
+        <div class="alloc" id="pBar" role="img" aria-label="Share of portfolio value by fund" style="margin-top:8px"></div>
+        <ul class="legend" id="pLegend"></ul>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="pbreak">
+      <h2 id="pbreak">By fund</h2>
+      <div class="tablewrap"><table><thead><tr><th>Fund</th><th class="n">Units</th><th class="n">Buy NAV</th><th class="n">Latest NAV</th><th class="n">Invested (₹)</th><th class="n">Value (₹)</th><th class="n">Gain / loss</th><th class="n">Share</th></tr></thead><tbody id="pRows"></tbody></table></div>
+      <p class="note">Totals use each fund's latest NAV and the units and purchase NAV saved in that fund's tab. A fund without a position is left out of the totals. A portfolio value chart over time needs NAVs for the same days across all funds, so it will make sense once the daily update has collected a few weeks of data.</p>
+    </section>
+  </div>
+
+  <div class="stack" id="fundView">
   <section class="panel" aria-labelledby="pos">
     <h2 id="pos">Your investment</h2>
     <div class="nums">
@@ -138,6 +171,7 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
     <div class="row"><button class="primary" id="bulkBtn">Import pasted NAVs</button><button class="ghost" id="clearBtn">Remove my added NAVs</button><span id="msg" role="status"></span></div>
     <p class="note">Added NAVs belong to the fund tab you have open. Official daily NAVs are on the <a href="https://www.qsif.com/nav/historical_nav" target="_blank" rel="noopener">qSIF Historical NAV page</a>. Entries stay in this browser.</p>
   </section>
+  </div>
 </div>
 
 <script>
@@ -161,7 +195,7 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
   ];
   var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   var $ = function (id) { return document.getElementById(id); };
-  var cur = FUNDS[0], user = [], range = 0, served = {};
+  var cur = FUNDS[0], user = [], range = 0, served = {}, view = "fund";
 
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
@@ -172,12 +206,24 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
   function inr(x) { return "₹" + Math.round(x).toLocaleString("en-IN"); }
   function signedInr(x) { return (x < 0 ? "−" : "+") + inr(Math.abs(x)); }
   function pct(x) { return (x < 0 ? "−" : "+") + Math.abs(x * 100).toFixed(2) + "%"; }
-  function all() {
+  function allFor(f, ur) {
     var m = {};
-    cur.seed.forEach(function (r) { m[r.d] = r; });
-    (served[cur.id] || []).forEach(function (r) { m[r.d] = r; });
-    user.forEach(function (r) { m[r.d] = { d: r.d, n: r.n, s: "added by you", u: true }; });
+    f.seed.forEach(function (r) { m[r.d] = r; });
+    (served[f.id] || []).forEach(function (r) { m[r.d] = r; });
+    ur.forEach(function (r) { m[r.d] = { d: r.d, n: r.n, s: "added by you", u: true }; });
     return Object.keys(m).sort().map(function (k) { return m[k]; });
+  }
+  function all() { return allFor(cur, user); }
+  function userNavs(f) {
+    var u = readJSON("qsif-nav-" + f.id, null);
+    if (u === null && f.id === "equity") u = readJSON("qsif-direct-nav-user", []);
+    return Array.isArray(u) ? u : [];
+  }
+  function storedPos(f) {
+    var st = readJSON("qsif-pos-" + f.id, null);
+    if (st === null && f.id === "equity") st = readJSON("qsif-direct-pos", null);
+    if (st === null) { var d = DEFAULT_POS[f.id] || {}; st = { a: d.u || "", n: d.n || "", d: d.d || "" }; }
+    return st;
   }
   function pos() {
     var u = parseFloat(String($("amt").value).replace(/[^0-9.]/g, ""));
@@ -199,13 +245,10 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
   function savePos() { var p = pos(); lsSet(posKey(), JSON.stringify({ a: $("amt").value, d: p.d, n: $("pnav").value })); }
 
   function loadFund(f) {
-    cur = f; lsSet("qsif-fund", f.id);
-    user = readJSON(navKey(), null);
-    if (user === null && f.id === "equity") user = readJSON("qsif-direct-nav-user", []);
-    if (!Array.isArray(user)) user = [];
-    var st = readJSON(posKey(), null);
-    if (st === null && f.id === "equity") st = readJSON("qsif-direct-pos", null);
-    if (st === null) { var d = DEFAULT_POS[f.id] || {}; st = { a: d.u || "", n: d.n || "", d: d.d || "" }; }
+    cur = f; view = "fund"; lsSet("qsif-fund", f.id);
+    $("fundView").hidden = false; $("portView").hidden = true;
+    user = userNavs(f);
+    var st = storedPos(f);
     $("amt").value = st.a || ""; $("pnav").value = st.n || ""; $("pdate").value = st.d || "";
     $("msg").textContent = "";
     $("fname").textContent = f.name;
@@ -332,13 +375,73 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
     if (d) { user = user.filter(function (r) { return r.d !== d; }); save(); render(); }
   });
 
-  $("tabs").innerHTML = FUNDS.map(function (f) { return "<button class='tab' role='tab' data-f='" + f.id + "' aria-selected='false'>" + f.tab + "</button>"; }).join("");
-  document.querySelectorAll(".tab").forEach(function (b) {
-    b.addEventListener("click", function () { FUNDS.forEach(function (f) { if (f.id === b.getAttribute("data-f")) loadFund(f); }); });
+  var COLORS = ["var(--c1)", "var(--c2)", "var(--c3)"];
+  function refresh() { if (view === "all") renderPortfolio(); else render(); }
+  function dateRange(ds) {
+    ds = ds.slice().sort(); var a = ds[0], b = ds[ds.length - 1];
+    return a === b ? "NAVs as on " + fmtDate(a) : "NAVs as on " + fmtDate(a) + " to " + fmtDate(b);
+  }
+  function showPortfolio() {
+    view = "all"; lsSet("qsif-fund", "all");
+    $("fundView").hidden = true; $("portView").hidden = false;
+    $("fname").textContent = "Total portfolio";
+    $("chips").innerHTML = "<span class='chip'>" + FUNDS.length + " funds</span><span class='chip'>Direct · Growth</span>";
+    document.querySelectorAll(".tab").forEach(function (b) { b.setAttribute("aria-selected", b.getAttribute("data-f") === "all" ? "true" : "false"); });
+    renderPortfolio();
+  }
+  function renderPortfolio() {
+    var list = FUNDS.map(function (f, i) {
+      var data = allFor(f, userNavs(f)), last = data[data.length - 1], st = storedPos(f);
+      var u = parseFloat(String(st.a).replace(/[^0-9.]/g, "")), n = parseFloat(st.n), ok = u > 0 && n > 0;
+      return { f: f, i: i, last: last, u: u, n: n, ok: ok, cost: ok ? u * n : 0, val: ok ? u * last.n : 0 };
+    });
+    var held = list.filter(function (x) { return x.ok; });
+    var cost = 0, val = 0;
+    held.forEach(function (x) { cost += x.cost; val += x.val; });
+    var g = val - cost;
+    $("pDates").textContent = dateRange(list.map(function (x) { return x.last.d; }));
+    $("pHeld").textContent = held.length + " of " + list.length + " funds have a position";
+    if (held.length) {
+      $("pVal").textContent = inr(val); $("pCost").textContent = inr(cost);
+      $("pGain").textContent = signedInr(g); $("pGain").className = "v " + (g < 0 ? "loss" : "gain");
+      $("pGainPct").textContent = pct(g / cost) + " on cost";
+    } else {
+      $("pVal").textContent = "–"; $("pCost").textContent = "–"; $("pGain").textContent = "–"; $("pGain").className = "v";
+      $("pGainPct").textContent = "Enter units and purchase NAV in each fund tab";
+    }
+    var bar = "", leg = "";
+    held.forEach(function (x) {
+      var share = val > 0 ? x.val / val : 0;
+      bar += "<div style='width:" + (share * 100).toFixed(2) + "%;background:" + COLORS[x.i] + "'></div>";
+      leg += "<li><span class='sw' style='background:" + COLORS[x.i] + "'></span>" + x.f.tab + " " + (share * 100).toFixed(1) + "%</li>";
+    });
+    $("pBar").innerHTML = bar; $("pLegend").innerHTML = leg || "<li>No positions yet</li>";
+    var h = "";
+    list.forEach(function (x) {
+      var link = "<button class='link' data-go='" + x.f.id + "'>" + x.f.name.replace("qSIF ", "") + "</button>";
+      if (!x.ok) { h += "<tr><td>" + link + "</td><td colspan='3' class='n'>latest ₹" + x.last.n.toFixed(4) + "</td><td colspan='4' class='n'>no position entered</td></tr>"; return; }
+      var g1 = x.val - x.cost;
+      h += "<tr><td>" + link + "</td><td class='n'>" + x.u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + "</td><td class='n'>" + x.n.toFixed(4) + "</td><td class='n'>" + x.last.n.toFixed(4) + "</td><td class='n'>" + Math.round(x.cost).toLocaleString("en-IN") + "</td><td class='n'>" + Math.round(x.val).toLocaleString("en-IN") + "</td><td class='n " + (g1 < 0 ? "loss" : "gain") + "'>" + signedInr(g1) + " (" + pct(g1 / x.cost) + ")</td><td class='n'>" + (val > 0 ? (x.val / val * 100).toFixed(1) : "0.0") + "%</td></tr>";
+    });
+    if (held.length) h += "<tr class='total'><td>Total</td><td></td><td></td><td></td><td class='n'>" + Math.round(cost).toLocaleString("en-IN") + "</td><td class='n'>" + Math.round(val).toLocaleString("en-IN") + "</td><td class='n " + (g < 0 ? "loss" : "gain") + "'>" + signedInr(g) + " (" + pct(g / cost) + ")</td><td class='n'>100%</td></tr>";
+    $("pRows").innerHTML = h;
+  }
+  $("pRows").addEventListener("click", function (e) {
+    var id = e.target.getAttribute && e.target.getAttribute("data-go");
+    if (id) FUNDS.forEach(function (f) { if (f.id === id) loadFund(f); });
   });
-  var startId = lsGet("qsif-fund"), start = FUNDS[0];
+
+  $("tabs").innerHTML = "<button class='tab' role='tab' data-f='all' aria-selected='false'>Portfolio</button>" + FUNDS.map(function (f) { return "<button class='tab' role='tab' data-f='" + f.id + "' aria-selected='false'>" + f.tab + "</button>"; }).join("");
+  document.querySelectorAll(".tab").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var id = b.getAttribute("data-f");
+      if (id === "all") { showPortfolio(); return; }
+      FUNDS.forEach(function (f) { if (f.id === id) loadFund(f); });
+    });
+  });
+  var startId = lsGet("qsif-fund"), start = null;
   FUNDS.forEach(function (f) { if (f.id === startId) start = f; });
-  loadFund(start);
+  if (start) loadFund(start); else { loadFund(FUNDS[0]); showPortfolio(); }
 
   /* The hosted site refreshes nav.json every day. Any NAVs in it are merged into the built-in readings. */
   try {
@@ -350,10 +453,11 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
         if (!Array.isArray(arr)) return;
         served[f.id] = arr.filter(function (x) { return x && /^\d{4}-\d{2}-\d{2}$/.test(x.d) && x.n > 0; }).map(function (x) { return { d: x.d, n: +x.n, s: x.s || "daily update" }; });
       });
-      render();
+      refresh();
     }).catch(function () {});
   } catch (e) {}
 })();
 </script>
+
 </body>
 </html>
