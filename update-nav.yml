@@ -1,0 +1,67 @@
+name: Update NAV
+
+on:
+  schedule:
+    - cron: "30 17 * * *"   # 11:00 pm India time
+    - cron: "30 2 * * *"    # 8:00 am India time, catches late NAVs
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch latest NAV
+        run: |
+          cat > update_nav.py <<'PYEOF'
+          import json, re, sys, os, datetime, urllib.request
+
+          URL = "https://stackwealth.in/mutual-funds/qsif-equity-long-short-fund-direct-growth"
+          OUT = "nav.json"
+          MON = {m: i + 1 for i, m in enumerate("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split())}
+
+          def parse(html):
+              m = re.search(r"Net Asset Value \(NAV\) of [^.<]*? as of \w{3} (\w{3}) (\d{1,2}) (\d{4}) is\s*₹\s*([0-9]+\.[0-9]+)", html)
+              if m:
+                  return "%s-%02d-%02d" % (m.group(3), MON[m.group(1)], int(m.group(2))), float(m.group(4))
+              m = re.search(r"NAV on (\d{4}-\d{2}-\d{2})\s*₹\s*([0-9]+\.[0-9]+)", html)
+              if m:
+                  return m.group(1), float(m.group(2))
+              return None
+
+          def main():
+              if len(sys.argv) > 1:
+                  html = open(sys.argv[1], encoding="utf-8").read()
+              else:
+                  req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
+                  html = urllib.request.urlopen(req, timeout=30).read().decode("utf-8", "ignore")
+              got = parse(html)
+              if not got:
+                  print("Could not find the NAV on the page.")
+                  sys.exit(1)
+              d, n = got
+              if not (0 < n < 1000) or d > (datetime.date.today() + datetime.timedelta(days=1)).isoformat():
+                  print("Rejected suspicious reading:", d, n)
+                  sys.exit(1)
+              rows = []
+              if os.path.exists(OUT):
+                  rows = json.load(open(OUT))
+              rows = [r for r in rows if r["d"] != d]
+              rows.append({"d": d, "n": n, "s": "daily update"})
+              rows.sort(key=lambda r: r["d"])
+              json.dump(rows, open(OUT, "w"), indent=1)
+              print("Saved", d, n)
+
+          main()
+          PYEOF
+          python3 update_nav.py
+      - name: Commit if changed
+        run: |
+          rm -f update_nav.py
+          git config user.name "nav-bot"
+          git config user.email "nav-bot@users.noreply.github.com"
+          git add nav.json
+          git diff --cached --quiet || (git commit -m "Update NAV" && git push)
