@@ -55,6 +55,7 @@ header { display: flex; flex-direction: column; gap: 12px; }
 .num .v { font-family: var(--mono); font-size: 1.55rem; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .num .s { font-size: 0.8rem; color: var(--muted); }
 .gain { color: var(--gain); } .loss { color: var(--loss); }
+h3.sub { font-size: 0.95rem; margin: 18px 0 8px; }
 .inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
 input, textarea, button { font: inherit; color: var(--ink); }
@@ -118,8 +119,8 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     </section>
     <section class="panel" aria-labelledby="pbreak">
       <h2 id="pbreak">By fund</h2>
-      <div class="tablewrap"><table><thead><tr><th>Fund</th><th class="n">Units</th><th class="n">Buy NAV</th><th class="n">Latest NAV</th><th class="n">Invested (₹)</th><th class="n">Value (₹)</th><th class="n">Gain / loss</th><th class="n">Share</th></tr></thead><tbody id="pRows"></tbody></table></div>
-      <p class="note">Totals use each fund's latest NAV and the units and purchase NAV saved in that fund's tab. A fund without a position is left out of the totals. A portfolio value chart over time needs NAVs for the same days across all funds, so it will make sense once the daily update has collected a few weeks of data.</p>
+      <div class="tablewrap"><table><thead><tr><th>Fund</th><th class="n">Units</th><th class="n">Avg buy NAV</th><th class="n">Latest NAV</th><th class="n">Invested (₹)</th><th class="n">Value (₹)</th><th class="n">Gain / loss</th><th class="n">Share</th></tr></thead><tbody id="pRows"></tbody></table></div>
+      <p class="note">Totals use each fund's latest NAV and the purchases you add in that fund's tab (buy NAV shown is the average). A fund without a position is left out of the totals. A portfolio value chart over time needs NAVs for the same days across all funds, so it will make sense once the daily update has collected a few weeks of data.</p>
     </section>
   </div>
 
@@ -132,12 +133,15 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
       <div class="num"><span class="eyebrow">Gain / loss</span><span class="v" id="gain">–</span><span class="s" id="gainPct">–</span></div>
       <div class="num"><span class="eyebrow">Below peak NAV</span><span class="v" id="dd">–</span><span class="s" id="peak">–</span></div>
     </div>
+    <h3 class="sub">Your purchases</h3>
+    <div class="tablewrap"><table><thead><tr><th>Date</th><th class="n">Units</th><th class="n">Buy NAV (₹)</th><th class="n">Cost (₹)</th><th class="n">Value now (₹)</th><th class="n">Gain / loss</th><th></th></tr></thead><tbody id="lotRows"></tbody></table></div>
     <div class="inputs">
-      <label for="amt">Units held<input id="amt" inputmode="decimal" placeholder="e.g. 90000.000"></label>
+      <label for="amt">Units bought<input id="amt" inputmode="decimal" placeholder="e.g. 90000.000"></label>
       <label for="pnav">Purchase NAV (₹)<input id="pnav" inputmode="decimal" placeholder="e.g. 11.05"></label>
       <label for="pdate">Purchase date (optional)<input id="pdate" type="date" value=""></label>
+      <button class="primary" id="addLot" style="align-self:flex-end">Add purchase</button>
     </div>
-    <p class="note" id="inputNote">Cost is units × purchase NAV. Add your purchase date to see a yearly rate. Each fund keeps its own position.</p>
+    <p class="note" id="lotMsg" role="status">Add each purchase as its own line. The totals above add all lines together, and the Portfolio tab uses them too. Each fund keeps its own purchases in this browser.</p>
   </section>
 
   <section class="panel" aria-labelledby="ch">
@@ -225,11 +229,20 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     if (st === null) { var d = DEFAULT_POS[f.id] || {}; st = { a: d.u || "", n: d.n || "", d: d.d || "" }; }
     return st;
   }
-  function pos() {
-    var u = parseFloat(String($("amt").value).replace(/[^0-9.]/g, ""));
-    var n = parseFloat($("pnav").value);
-    return { a: u * n, n: n, d: $("pdate").value, u: u };
+  function num(x) { return parseFloat(String(x).replace(/[^0-9.]/g, "")); }
+  function getLots(f) {
+    var l = readJSON("qsif-lots-" + f.id, null);
+    if (Array.isArray(l)) return l.filter(function (x) { return x && x.u > 0 && x.n > 0; });
+    var st = storedPos(f), u = num(st.a), n = parseFloat(st.n);
+    return u > 0 && n > 0 ? [{ u: u, n: n, d: st.d || "" }] : [];
   }
+  function agg(lots) {
+    var u = 0, a = 0, d = "";
+    lots.forEach(function (x) { u += x.u; a += x.u * x.n; if (x.d && (!d || x.d < d)) d = x.d; });
+    return { u: u, a: a, n: u > 0 ? a / u : NaN, d: d, k: lots.length };
+  }
+  var lots = [];
+  function pos() { return agg(lots); }
   function parseDate(t) {
     var m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (m) return m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
@@ -240,16 +253,15 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     return null;
   }
   function navKey() { return "qsif-nav-" + cur.id; }
-  function posKey() { return "qsif-pos-" + cur.id; }
   function save() { lsSet(navKey(), JSON.stringify(user)); }
-  function savePos() { var p = pos(); lsSet(posKey(), JSON.stringify({ a: $("amt").value, d: p.d, n: $("pnav").value })); }
+  function saveLots() { lsSet("qsif-lots-" + cur.id, JSON.stringify(lots)); }
 
   function loadFund(f) {
     cur = f; view = "fund"; lsSet("qsif-fund", f.id);
     $("fundView").hidden = false; $("portView").hidden = true;
     user = userNavs(f);
-    var st = storedPos(f);
-    $("amt").value = st.a || ""; $("pnav").value = st.n || ""; $("pdate").value = st.d || "";
+    lots = getLots(f);
+    $("amt").value = ""; $("pnav").value = ""; $("pdate").value = "";
     $("msg").textContent = "";
     $("fname").textContent = f.name;
     var c = "<span class='chip'>Direct · Growth</span>" + (f.isin ? "<span class='chip'>ISIN " + f.isin + "</span>" : "") + "<span class='chip'>Launched " + f.launched + "</span><span class='chip'>Min. ₹10 lakh</span>";
@@ -270,16 +282,27 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     if (ok) {
       var v = p.u * last.n, g = v - p.a, gp = g / p.a;
       $("val").textContent = inr(v);
-      $("units").textContent = p.u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + " units · cost " + inr(p.a);
+      $("units").textContent = p.u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + " units · cost " + inr(p.a) + (p.k > 1 ? " · avg NAV " + p.n.toFixed(4) : "");
       $("gain").textContent = signedInr(g); $("gain").className = "v " + (g < 0 ? "loss" : "gain");
-      var days = p.d ? (ms(last.d) - ms(p.d)) / 864e5 : 0, extra = "";
+      var days = p.d && p.k === 1 ? (ms(last.d) - ms(p.d)) / 864e5 : 0, extra = "";
       if (days >= 30) extra = " · " + pct(Math.pow(v / p.a, 365 / days) - 1) + " a year";
-      $("gainPct").textContent = pct(gp) + " on cost" + (p.d ? " since " + fmtDate(p.d) : "") + extra;
+      $("gainPct").textContent = pct(gp) + " on cost" + (p.d && p.k === 1 ? " since " + fmtDate(p.d) : "") + (p.k > 1 ? " across " + p.k + " purchases" : "") + extra;
     } else {
       $("val").textContent = "–"; $("gain").textContent = "–"; $("gain").className = "v";
-      $("units").textContent = "Enter your units and purchase NAV below"; $("gainPct").textContent = "";
+      $("units").textContent = "Add a purchase below"; $("gainPct").textContent = "";
     }
+    lotTable(last);
     rows(data, p, ok); chart(data);
+  }
+
+  function lotTable(last) {
+    var h = "";
+    var order = lots.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) { return (a.x.d || "9999") < (b.x.d || "9999") ? -1 : 1; });
+    order.forEach(function (o) {
+      var x = o.x, c = x.u * x.n, v = x.u * last.n, g = v - c;
+      h += "<tr><td>" + (x.d ? fmtDate(x.d) : "–") + "</td><td class='n'>" + x.u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + "</td><td class='n'>" + x.n.toFixed(4) + "</td><td class='n'>" + Math.round(c).toLocaleString("en-IN") + "</td><td class='n'>" + Math.round(v).toLocaleString("en-IN") + "</td><td class='n " + (g < 0 ? "loss" : "gain") + "'>" + signedInr(g) + " (" + pct(g / c) + ")</td><td><button class='ghost' data-lot='" + o.i + "'>Remove</button></td></tr>";
+    });
+    $("lotRows").innerHTML = h || "<tr><td colspan='7' class='n'>No purchases yet</td></tr>";
   }
 
   function rows(data, p, ok) {
@@ -315,7 +338,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     }
     var p = pos();
     if (p.n > 0 && p.n >= lo && p.n <= hi) {
-      s += "<line x1='" + L + "' x2='" + (W - R) + "' y1='" + Y(p.n) + "' y2='" + Y(p.n) + "' stroke='var(--muted)' stroke-width='1' stroke-dasharray='4 4'/><text x='" + (W - R) + "' y='" + (Y(p.n) - 5) + "' text-anchor='end'>your buy NAV " + p.n.toFixed(2) + "</text>";
+      s += "<line x1='" + L + "' x2='" + (W - R) + "' y1='" + Y(p.n) + "' y2='" + Y(p.n) + "' stroke='var(--muted)' stroke-width='1' stroke-dasharray='4 4'/><text x='" + (W - R) + "' y='" + (Y(p.n) - 5) + "' text-anchor='end'>your avg buy NAV " + p.n.toFixed(2) + "</text>";
     }
     pts = vis.map(function (r) { return { x: X(ms(r.d)), y: Y(r.n), r: r }; });
     var path = pts.map(function (q, i) { return (i ? "L" : "M") + q.x.toFixed(1) + " " + q.y.toFixed(1); }).join(" ");
@@ -347,7 +370,22 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
       render();
     });
   });
-  ["amt", "pdate", "pnav"].forEach(function (id) { $(id).addEventListener("input", function () { savePos(); render(); }); });
+  function addLot() {
+    var u = num($("amt").value), n = parseFloat($("pnav").value), d = $("pdate").value;
+    var m = $("lotMsg");
+    if (!(u > 0) || !(n > 0)) { m.textContent = "Enter the units and the purchase NAV for this purchase."; m.className = "note loss"; return; }
+    lots.push({ u: u, n: n, d: d }); saveLots();
+    $("amt").value = ""; $("pnav").value = ""; $("pdate").value = "";
+    m.textContent = "Added " + u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + " units at ₹" + n.toFixed(4) + "."; m.className = "note gain";
+    render();
+  }
+  $("addLot").addEventListener("click", addLot);
+  ["amt", "pnav", "pdate"].forEach(function (id) { $(id).addEventListener("keydown", function (e) { if (e.key === "Enter") addLot(); }); });
+  $("lotRows").addEventListener("click", function (e) {
+    var i = e.target.getAttribute && e.target.getAttribute("data-lot");
+    if (i === null || i === undefined) return;
+    lots.splice(+i, 1); saveLots(); render();
+  });
 
   function msg(t, bad) { $("msg").textContent = t; $("msg").className = bad ? "loss" : "gain"; }
   function upsert(d, n) { user = user.filter(function (r) { return r.d !== d; }); user.push({ d: d, n: n }); }
@@ -391,9 +429,9 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   }
   function renderPortfolio() {
     var list = FUNDS.map(function (f, i) {
-      var data = allFor(f, userNavs(f)), last = data[data.length - 1], st = storedPos(f);
-      var u = parseFloat(String(st.a).replace(/[^0-9.]/g, "")), n = parseFloat(st.n), ok = u > 0 && n > 0;
-      return { f: f, i: i, last: last, u: u, n: n, ok: ok, cost: ok ? u * n : 0, val: ok ? u * last.n : 0 };
+      var data = allFor(f, userNavs(f)), last = data[data.length - 1], ag = agg(getLots(f));
+      var u = ag.u, n = ag.n, ok = u > 0 && n > 0;
+      return { f: f, i: i, last: last, u: u, n: n, ok: ok, cost: ok ? ag.a : 0, val: ok ? u * last.n : 0 };
     });
     var held = list.filter(function (x) { return x.ok; });
     var cost = 0, val = 0;
