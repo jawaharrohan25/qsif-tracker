@@ -57,6 +57,7 @@ header { display: flex; flex-direction: column; gap: 12px; }
 .gain { color: var(--gain); } .loss { color: var(--loss); }
 .profs { margin: 14px 0 6px; }
 .profs button { padding: 6px 14px; }
+#imp[hidden] { display: none; }
 h3.sub { font-size: 0.95rem; margin: 18px 0 8px; }
 .inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
@@ -106,6 +107,12 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     <div class="chips" id="chips"></div>
   </header>
 
+  <section class="panel" id="imp" hidden style="margin-bottom:16px">
+    <h2 id="impT">Load data from this link?</h2>
+    <p class="note" id="impN" style="margin-top:0"></p>
+    <div class="row"><button class="primary" id="impYes">Load it</button><button class="ghost" id="impNo">Ignore</button></div>
+  </section>
+
   <div class="stack" id="portView" hidden>
     <section class="panel" aria-labelledby="ptitle">
       <h2 id="ptitle">Total portfolio</h2>
@@ -124,6 +131,12 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
       <h2 id="pbreak">By fund</h2>
       <div class="tablewrap"><table><thead><tr><th>Fund</th><th class="n">Units</th><th class="n">Avg buy NAV</th><th class="n">Latest NAV</th><th class="n">Invested (₹)</th><th class="n">Value (₹)</th><th class="n">Gain / loss</th><th class="n">Share</th></tr></thead><tbody id="pRows"></tbody></table></div>
       <p class="note">Totals use each fund's latest NAV and the purchases you add in that fund's tab (buy NAV shown is the average). A fund without a position is left out of the totals. A portfolio value chart over time needs NAVs for the same days across all funds, so it will make sense once the daily update has collected a few weeks of data.</p>
+    </section>
+    <section class="panel" aria-labelledby="xfer">
+      <h2 id="xfer">Use on another device</h2>
+      <p class="note" style="margin-top:0">Your purchases live in this browser only. Make a link that carries them (both portfolios and any NAVs you added), then open it on your phone or another browser. The data is inside the link and is not stored anywhere else, so share it only with yourself.</p>
+      <div class="row"><button class="primary" id="mkLink">Copy my data link</button><span id="linkMsg" role="status"></span></div>
+      <label for="linkBox" style="margin-top:10px">Your link<textarea id="linkBox" rows="3" readonly placeholder="Press the button to make the link"></textarea></label>
     </section>
   </div>
 
@@ -233,7 +246,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     return st;
   }
   function num(x) { return parseFloat(String(x).replace(/[^0-9.]/g, "")); }
-  var PROFS = [{ id: "me", name: "Jawahar portfolio", short: "My" }, { id: "son", name: "Rohan portfolio", short: "Son's" }];
+  var PROFS = [{ id: "me", name: "My portfolio", short: "My" }, { id: "son", name: "Son's portfolio", short: "Son's" }];
   var prof = lsGet("qsif-prof") === "son" ? "son" : "me";
   function profName() { return PROFS.filter(function (x) { return x.id === prof; })[0]; }
   function lotsKey(f) { return prof === "me" ? "qsif-lots-" + f.id : "qsif-lots-son-" + f.id; }
@@ -487,6 +500,57 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
       FUNDS.forEach(function (f) { if (f.id === id) loadFund(f); });
     });
   });
+  /* Move purchases between devices through a link: the data rides in the part after # and never leaves the browser. */
+  function b64e(str) { return btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+  function b64d(t) { t = t.replace(/-/g, "+").replace(/_/g, "/"); while (t.length % 4) t += "="; return decodeURIComponent(escape(atob(t))); }
+  function lotsOf(pid, f) { var keep = prof; prof = pid; var l = getLots(f); prof = keep; return l; }
+  function buildPayload() {
+    var o = { v: 1, l: {}, n: {} };
+    PROFS.forEach(function (pr) { FUNDS.forEach(function (f) {
+      var l = lotsOf(pr.id, f); if (l.length) o.l[pr.id + "|" + f.id] = l.map(function (x) { return [x.u, x.n, x.d || ""]; });
+    }); });
+    FUNDS.forEach(function (f) { var u = userNavs(f); if (u.length) o.n[f.id] = u.map(function (x) { return [x.d, x.n]; }); });
+    return o;
+  }
+  function countLots(o) { var c = 0; for (var k in o.l) c += o.l[k].length; return c; }
+  $("mkLink").addEventListener("click", function () {
+    var o = buildPayload(), url = location.href.split("#")[0] + "#d=" + b64e(JSON.stringify(o));
+    $("linkBox").value = url;
+    var n = countLots(o);
+    if (!n) { $("linkMsg").textContent = "No purchases saved here yet."; $("linkMsg").className = "loss"; return; }
+    var done = function () { $("linkMsg").textContent = "Link copied (" + n + " purchase" + (n === 1 ? "" : "s") + "). Send it to yourself and open it on the other device."; $("linkMsg").className = "gain"; };
+    var fail = function () { $("linkBox").focus(); $("linkBox").select(); $("linkMsg").textContent = "Select the link below and copy it."; $("linkMsg").className = "gain"; };
+    try { navigator.clipboard.writeText(url).then(done, fail); } catch (e) { fail(); }
+  });
+  var incoming = null;
+  try {
+    var hm = (location.hash || "").match(/^#d=([A-Za-z0-9_-]+)$/);
+    if (hm) { var o = JSON.parse(b64d(hm[1])); if (o && o.v === 1 && o.l) incoming = o; }
+  } catch (e) { incoming = null; }
+  if (incoming) {
+    $("impN").textContent = "This link carries " + countLots(incoming) + " purchase" + (countLots(incoming) === 1 ? "" : "s") + ". Loading it replaces the purchases saved in this browser for the funds it covers.";
+    $("imp").hidden = false;
+  }
+  function closeImp() { $("imp").hidden = true; try { history.replaceState(null, "", location.href.split("#")[0]); } catch (e) {} }
+  $("impNo").addEventListener("click", closeImp);
+  $("impYes").addEventListener("click", function () {
+    PROFS.forEach(function (pr) { FUNDS.forEach(function (f) {
+      var rows = incoming.l[pr.id + "|" + f.id];
+      if (!rows) return;
+      var clean = rows.map(function (r) { return { u: +r[0], n: +r[1], d: /^\d{4}-\d{2}-\d{2}$/.test(r[2]) ? r[2] : "" }; }).filter(function (x) { return x.u > 0 && x.n > 0; });
+      lsSet((pr.id === "me" ? "qsif-lots-" : "qsif-lots-son-") + f.id, JSON.stringify(clean));
+    }); });
+    FUNDS.forEach(function (f) {
+      var rows = incoming.n && incoming.n[f.id];
+      if (!rows) return;
+      var have = userNavs(f), m = {};
+      have.concat(rows.map(function (r) { return { d: r[0], n: +r[1] }; })).forEach(function (r) { if (/^\d{4}-\d{2}-\d{2}$/.test(r.d) && r.n > 0) m[r.d] = { d: r.d, n: r.n }; });
+      lsSet("qsif-nav-" + f.id, JSON.stringify(Object.keys(m).sort().map(function (k) { return m[k]; })));
+    });
+    closeImp();
+    if (view === "all") showPortfolio(); else loadFund(cur);
+  });
+
   function drawProfs() {
     $("profs").innerHTML = PROFS.map(function (x) { return "<button class='ghost' data-p='" + x.id + "' aria-pressed='" + (x.id === prof ? "true" : "false") + "'>" + x.name + "</button>"; }).join("");
   }
