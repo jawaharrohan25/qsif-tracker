@@ -246,7 +246,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     return st;
   }
   function num(x) { return parseFloat(String(x).replace(/[^0-9.]/g, "")); }
-  var PROFS = [{ id: "me", name: "My portfolio", short: "My" }, { id: "son", name: "Son's portfolio", short: "Son's" }];
+  var PROFS = [{ id: "me", name: "Jawahar portfolio", short: "Jawahar's" }, { id: "son", name: "Rohan portfolio", short: "Rohan's" }];
   var prof = lsGet("qsif-prof") === "son" ? "son" : "me";
   function profName() { return PROFS.filter(function (x) { return x.id === prof; })[0]; }
   function lotsKey(f) { return prof === "me" ? "qsif-lots-" + f.id : "qsif-lots-son-" + f.id; }
