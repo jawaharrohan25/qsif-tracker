@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>qSIF Equity L-S Tracker</title>
+<title>qSIF Fund Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: a single working column. Position summary on top, NAV chart in the middle, record table and import below. */
+/* Layout: a single working column. Fund tabs, then position summary, NAV chart, record table and import. */
 :root {
   --bg: #eef1f4;
   --surface: #ffffff;
@@ -40,7 +40,11 @@ h1, h2 { font-family: var(--display); margin: 0; text-wrap: balance; letter-spac
 h1 { font-size: clamp(1.6rem, 4.5vw, 2.2rem); line-height: 1.1; }
 h2 { font-size: 1.1rem; }
 .eyebrow { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+header { display: flex; flex-direction: column; gap: 12px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--line); }
+.tab { background: transparent; color: var(--muted); border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 8px 14px; font-weight: 500; cursor: pointer; margin-bottom: -1px; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { font-family: var(--mono); font-size: 0.74rem; padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px 24px; }
@@ -81,9 +85,10 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
 <body>
 <div class="wrap">
   <header>
-    <div class="eyebrow">Quant Mutual Fund · Specialized Investment Fund</div>
-    <h1>qSIF Equity Long-Short Fund</h1>
-    <div class="chips"><span class="chip">Direct · Growth</span><span class="chip">ISIN INF966L30019</span><span class="chip">Launched 8 Oct 2025</span><span class="chip">Min. ₹10 lakh</span></div>
+    <div class="eyebrow">Quant Mutual Fund · Specialized Investment Funds · Direct Growth</div>
+    <div class="tabs" role="tablist" aria-label="Fund" id="tabs"></div>
+    <h1 id="fname"></h1>
+    <div class="chips" id="chips"></div>
   </header>
 
   <section class="panel" aria-labelledby="pos">
@@ -99,7 +104,7 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
       <label for="pnav">Purchase NAV (₹)<input id="pnav" inputmode="decimal" placeholder="e.g. 11.05"></label>
       <label for="pdate">Purchase date (optional)<input id="pdate" type="date" value=""></label>
     </div>
-    <p class="note" id="inputNote">Cost is units × purchase NAV. Add your purchase date to see a yearly rate.</p>
+    <p class="note" id="inputNote">Cost is units × purchase NAV. Add your purchase date to see a yearly rate. Each fund keeps its own position.</p>
   </section>
 
   <section class="panel" aria-labelledby="ch">
@@ -119,7 +124,7 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
   <section class="panel" aria-labelledby="tb">
     <h2 id="tb">NAV records</h2>
     <div class="tablewrap"><table><thead><tr><th>Date</th><th class="n">NAV (₹)</th><th class="n">Value of your units (₹)</th><th>Source</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
-    <p class="note">The built-in readings are single days collected from fund data sites, so the series is sparse. On the hosted site a daily update adds the newest NAV and the history grows from there. You can also add or paste NAVs below.</p>
+    <p class="note">The built-in readings are single days collected from fund sites, so each history starts sparse. On the hosted site a daily update adds the newest NAV for every fund and the history grows from there. You can also add or paste NAVs below.</p>
   </section>
 
   <section class="panel" aria-labelledby="im">
@@ -131,26 +136,36 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
     </div>
     <label for="bulk">Paste the full history, one line per day (for example 08-Oct-2026, 10.6329)<textarea id="bulk" placeholder="09-Oct-2026	10.6900&#10;08-Oct-2026	10.6329"></textarea></label>
     <div class="row"><button class="primary" id="bulkBtn">Import pasted NAVs</button><button class="ghost" id="clearBtn">Remove my added NAVs</button><span id="msg" role="status"></span></div>
-    <p class="note">Official daily NAVs are on the <a href="https://www.qsif.com/nav/historical_nav" target="_blank" rel="noopener">qSIF Historical NAV page</a>. Pick the Equity Long-Short Fund, Regular Growth, copy the table and paste it here. Entries stay in this browser.</p>
+    <p class="note">Added NAVs belong to the fund tab you have open. Official daily NAVs are on the <a href="https://www.qsif.com/nav/historical_nav" target="_blank" rel="noopener">qSIF Historical NAV page</a>. Entries stay in this browser.</p>
   </section>
 </div>
 
 <script>
 (function () {
-  var SEED = [
-    { d: "2025-10-08", n: 10.0000, s: "Launch NAV (₹10 unit price)" },
-    { d: "2026-10-07", n: 11.04, s: "public page (2 decimals)" },
-    { d: "2026-10-08", n: 10.7891, s: "public page" },
-    { d: "2026-10-13", n: 11.0157, s: "public page" }
+  var DEFAULT_POS = {};
+  var FUNDS = [
+    { id: "equity", name: "qSIF Equity Long-Short Fund", tab: "Equity L-S", isin: "INF966L30019", launched: "8 Oct 2025", seed: [
+      { d: "2025-10-08", n: 10.0000, s: "Launch NAV (₹10 unit price)" },
+      { d: "2026-10-07", n: 11.04, s: "public page (2 decimals)" },
+      { d: "2026-10-08", n: 10.7891, s: "public page" },
+      { d: "2026-10-13", n: 11.0157, s: "public page" }
+    ] },
+    { id: "hybrid", name: "qSIF Hybrid Long-Short Fund", tab: "Hybrid L-S", isin: "", launched: "20 Oct 2025", seed: [
+      { d: "2026-10-13", n: 13.1705, s: "public page" }
+    ] },
+    { id: "aaa", name: "qSIF Active Asset Allocator Long-Short Fund", tab: "Asset Allocator", isin: "", launched: "24 Apr 2026", seed: [
+      { d: "2026-10-05", n: 12.9939, s: "public page" },
+      { d: "2026-10-09", n: 12.9635, s: "qsif.com" },
+      { d: "2026-10-13", n: 13.0153, s: "qsif.com" }
+    ] }
   ];
   var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   var $ = function (id) { return document.getElementById(id); };
-  var user = [], range = 0;
-  try { user = JSON.parse(localStorage.getItem("qsif-direct-nav-user") || "[]") || []; } catch (e) { user = []; }
-  try {
-    var st = JSON.parse(localStorage.getItem("qsif-direct-pos") || "null");
-    if (st) { $("amt").value = st.a; $("pdate").value = st.d || ""; $("pnav").value = st.n; }
-  } catch (e) {}
+  var cur = FUNDS[0], user = [], range = 0, served = {};
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function readJSON(k, alt) { try { var v = JSON.parse(lsGet(k) || "null"); return v === null ? alt : v; } catch (e) { return alt; } }
 
   function ms(d) { var p = d.split("-"); return Date.UTC(+p[0], +p[1] - 1, +p[2]); }
   function fmtDate(d) { var p = d.split("-"); return +p[2] + " " + MON[+p[1] - 1] + " " + p[0]; }
@@ -159,7 +174,8 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
   function pct(x) { return (x < 0 ? "−" : "+") + Math.abs(x * 100).toFixed(2) + "%"; }
   function all() {
     var m = {};
-    SEED.forEach(function (r) { m[r.d] = r; });
+    cur.seed.forEach(function (r) { m[r.d] = r; });
+    (served[cur.id] || []).forEach(function (r) { m[r.d] = r; });
     user.forEach(function (r) { m[r.d] = { d: r.d, n: r.n, s: "added by you", u: true }; });
     return Object.keys(m).sort().map(function (k) { return m[k]; });
   }
@@ -177,12 +193,31 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
     if (m) return m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2);
     return null;
   }
-  function save() { try { localStorage.setItem("qsif-direct-nav-user", JSON.stringify(user)); } catch (e) {} }
-  function savePos() { var p = pos(); try { localStorage.setItem("qsif-direct-pos", JSON.stringify({ a: $("amt").value, d: p.d, n: $("pnav").value })); } catch (e) {} }
+  function navKey() { return "qsif-nav-" + cur.id; }
+  function posKey() { return "qsif-pos-" + cur.id; }
+  function save() { lsSet(navKey(), JSON.stringify(user)); }
+  function savePos() { var p = pos(); lsSet(posKey(), JSON.stringify({ a: $("amt").value, d: p.d, n: $("pnav").value })); }
+
+  function loadFund(f) {
+    cur = f; lsSet("qsif-fund", f.id);
+    user = readJSON(navKey(), null);
+    if (user === null && f.id === "equity") user = readJSON("qsif-direct-nav-user", []);
+    if (!Array.isArray(user)) user = [];
+    var st = readJSON(posKey(), null);
+    if (st === null && f.id === "equity") st = readJSON("qsif-direct-pos", null);
+    if (st === null) { var d = DEFAULT_POS[f.id] || {}; st = { a: d.u || "", n: d.n || "", d: d.d || "" }; }
+    $("amt").value = st.a || ""; $("pnav").value = st.n || ""; $("pdate").value = st.d || "";
+    $("msg").textContent = "";
+    $("fname").textContent = f.name;
+    var c = "<span class='chip'>Direct · Growth</span>" + (f.isin ? "<span class='chip'>ISIN " + f.isin + "</span>" : "") + "<span class='chip'>Launched " + f.launched + "</span><span class='chip'>Min. ₹10 lakh</span>";
+    $("chips").innerHTML = c;
+    document.querySelectorAll(".tab").forEach(function (b) { b.setAttribute("aria-selected", b.getAttribute("data-f") === f.id ? "true" : "false"); });
+    render();
+  }
 
   function render() {
     var data = all(), p = pos(), last = data[data.length - 1];
-    var ok = p.a > 0 && p.n > 0;
+    var ok = p.u > 0 && p.n > 0;
     $("nav").textContent = "₹" + last.n.toFixed(4);
     $("navDate").textContent = "as on " + fmtDate(last.d);
     var peak = data.reduce(function (b, r) { return r.n > b.n ? r : b; }, data[0]);
@@ -197,7 +232,10 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
       var days = p.d ? (ms(last.d) - ms(p.d)) / 864e5 : 0, extra = "";
       if (days >= 30) extra = " · " + pct(Math.pow(v / p.a, 365 / days) - 1) + " a year";
       $("gainPct").textContent = pct(gp) + " on cost" + (p.d ? " since " + fmtDate(p.d) : "") + extra;
-    } else { $("val").textContent = "–"; $("gain").textContent = "–"; $("units").textContent = "Enter amount and NAV"; $("gainPct").textContent = ""; }
+    } else {
+      $("val").textContent = "–"; $("gain").textContent = "–"; $("gain").className = "v";
+      $("units").textContent = "Enter your units and purchase NAV below"; $("gainPct").textContent = "";
+    }
     rows(data, p, ok); chart(data);
   }
 
@@ -215,7 +253,8 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
     var last = ms(data[data.length - 1].d);
     var vis = range ? data.filter(function (r) { return ms(r.d) >= last - range * 864e5; }) : data;
     if (vis.length < 2) { var idx = Math.max(0, data.length - 2); vis = data.slice(idx); }
-    var x0 = ms(vis[0].d), x1 = ms(vis[vis.length - 1].d); if (x1 === x0) x1 = x0 + 864e5;
+    var x0 = ms(vis[0].d), x1 = ms(vis[vis.length - 1].d);
+    if (x1 === x0) { x0 -= 7 * 864e5; x1 += 7 * 864e5; }
     var lo = Math.min.apply(null, vis.map(function (r) { return r.n; })), hi = Math.max.apply(null, vis.map(function (r) { return r.n; }));
     var pad = (hi - lo) * 0.15 || 0.2; lo = Math.floor((lo - pad) * 4) / 4; hi = Math.ceil((hi + pad) * 4) / 4;
     var X = function (t) { return L + (t - x0) / (x1 - x0) * (W - L - R); };
@@ -292,16 +331,24 @@ td button { padding: 2px 8px; font-size: 0.78rem; }
     var d = e.target.getAttribute && e.target.getAttribute("data-del");
     if (d) { user = user.filter(function (r) { return r.d !== d; }); save(); render(); }
   });
-  render();
+
+  $("tabs").innerHTML = FUNDS.map(function (f) { return "<button class='tab' role='tab' data-f='" + f.id + "' aria-selected='false'>" + f.tab + "</button>"; }).join("");
+  document.querySelectorAll(".tab").forEach(function (b) {
+    b.addEventListener("click", function () { FUNDS.forEach(function (f) { if (f.id === b.getAttribute("data-f")) loadFund(f); }); });
+  });
+  var startId = lsGet("qsif-fund"), start = FUNDS[0];
+  FUNDS.forEach(function (f) { if (f.id === startId) start = f; });
+  loadFund(start);
+
   /* The hosted site refreshes nav.json every day. Any NAVs in it are merged into the built-in readings. */
   try {
-    fetch("nav.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : []; }).then(function (arr) {
-      if (!Array.isArray(arr)) return;
-      arr.forEach(function (x) {
-        if (x && /^\d{4}-\d{2}-\d{2}$/.test(x.d) && x.n > 0) {
-          SEED = SEED.filter(function (r) { return r.d !== x.d; });
-          SEED.push({ d: x.d, n: +x.n, s: x.s || "daily update" });
-        }
+    fetch("nav.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!j) return;
+      if (Array.isArray(j)) j = { equity: j };
+      FUNDS.forEach(function (f) {
+        var arr = j[f.id];
+        if (!Array.isArray(arr)) return;
+        served[f.id] = arr.filter(function (x) { return x && /^\d{4}-\d{2}-\d{2}$/.test(x.d) && x.n > 0; }).map(function (x) { return { d: x.d, n: +x.n, s: x.s || "daily update" }; });
       });
       render();
     }).catch(function () {});
