@@ -55,6 +55,8 @@ header { display: flex; flex-direction: column; gap: 12px; }
 .num .v { font-family: var(--mono); font-size: 1.55rem; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .num .s { font-size: 0.8rem; color: var(--muted); }
 .gain { color: var(--gain); } .loss { color: var(--loss); }
+.profs { margin: 14px 0 6px; }
+.profs button { padding: 6px 14px; }
 h3.sub { font-size: 0.95rem; margin: 18px 0 8px; }
 .inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
@@ -98,6 +100,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 <div class="wrap">
   <header>
     <div class="eyebrow">Quant Mutual Fund · Specialized Investment Funds · Direct Growth</div>
+    <div class="ranges profs" role="group" aria-label="Whose portfolio" id="profs"></div>
     <div class="tabs" role="tablist" aria-label="Fund" id="tabs"></div>
     <h1 id="fname"></h1>
     <div class="chips" id="chips"></div>
@@ -230,10 +233,15 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     return st;
   }
   function num(x) { return parseFloat(String(x).replace(/[^0-9.]/g, "")); }
+  var PROFS = [{ id: "me", name: "My portfolio", short: "My" }, { id: "son", name: "Son's portfolio", short: "Son's" }];
+  var prof = lsGet("qsif-prof") === "son" ? "son" : "me";
+  function profName() { return PROFS.filter(function (x) { return x.id === prof; })[0]; }
+  function lotsKey(f) { return prof === "me" ? "qsif-lots-" + f.id : "qsif-lots-son-" + f.id; }
   function getLots(f) {
-    var l = readJSON("qsif-lots-" + f.id, null);
+    var l = readJSON(lotsKey(f), null);
     if (Array.isArray(l)) return l.filter(function (x) { return x && x.u > 0 && x.n > 0; });
     var st = storedPos(f), u = num(st.a), n = parseFloat(st.n);
+    if (prof !== "me") return [];
     return u > 0 && n > 0 ? [{ u: u, n: n, d: st.d || "" }] : [];
   }
   function agg(lots) {
@@ -254,7 +262,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   }
   function navKey() { return "qsif-nav-" + cur.id; }
   function save() { lsSet(navKey(), JSON.stringify(user)); }
-  function saveLots() { lsSet("qsif-lots-" + cur.id, JSON.stringify(lots)); }
+  function saveLots() { lsSet(lotsKey(cur), JSON.stringify(lots)); }
 
   function loadFund(f) {
     cur = f; view = "fund"; lsSet("qsif-fund", f.id);
@@ -263,6 +271,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     lots = getLots(f);
     $("amt").value = ""; $("pnav").value = ""; $("pdate").value = "";
     $("msg").textContent = "";
+    $("pos").textContent = profName().short + " investment";
     $("fname").textContent = f.name;
     var c = "<span class='chip'>Direct · Growth</span>" + (f.isin ? "<span class='chip'>ISIN " + f.isin + "</span>" : "") + "<span class='chip'>Launched " + f.launched + "</span><span class='chip'>Min. ₹10 lakh</span>";
     $("chips").innerHTML = c;
@@ -422,7 +431,8 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   function showPortfolio() {
     view = "all"; lsSet("qsif-fund", "all");
     $("fundView").hidden = true; $("portView").hidden = false;
-    $("fname").textContent = "Total portfolio";
+    $("fname").textContent = profName().short + " total portfolio";
+    $("ptitle").textContent = profName().name;
     $("chips").innerHTML = "<span class='chip'>" + FUNDS.length + " funds</span><span class='chip'>Direct · Growth</span>";
     document.querySelectorAll(".tab").forEach(function (b) { b.setAttribute("aria-selected", b.getAttribute("data-f") === "all" ? "true" : "false"); });
     renderPortfolio();
@@ -476,6 +486,16 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
       if (id === "all") { showPortfolio(); return; }
       FUNDS.forEach(function (f) { if (f.id === id) loadFund(f); });
     });
+  });
+  function drawProfs() {
+    $("profs").innerHTML = PROFS.map(function (x) { return "<button class='ghost' data-p='" + x.id + "' aria-pressed='" + (x.id === prof ? "true" : "false") + "'>" + x.name + "</button>"; }).join("");
+  }
+  drawProfs();
+  $("profs").addEventListener("click", function (e) {
+    var id = e.target.getAttribute && e.target.getAttribute("data-p");
+    if (!id || id === prof) return;
+    prof = id; lsSet("qsif-prof", id); drawProfs();
+    if (view === "all") showPortfolio(); else loadFund(cur);
   });
   var startId = lsGet("qsif-fund"), start = null;
   FUNDS.forEach(function (f) { if (f.id === startId) start = f; });
