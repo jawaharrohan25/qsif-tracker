@@ -4,7 +4,7 @@
      apiKey:  "AIzaSyBRtDEIoXmsv_yFd0ciosodllOBi5Fp6W0",
      authDomain: "qsif-tracker.firebaseapp.com",
      projectId: "qsif-tracker",
-     appId: "1:582368180:web:2b382317b2b1b930fe10e1"
+     appId: "1:582368180:web:2b382317b2b1b930fe10e1",
      sharedDoc: "YqPmZC91ofYqf2lfNBAFNkQfTqA3"
    };
 
