@@ -58,12 +58,9 @@ def qsif_direct_growth(keyword, avoid=("ex-top", "sector", "idcw", "dividend")):
 AAA_ROW = r"qsif Active Asset Allocator Long-Short Fund\s*-\s*Growth Option\s*-\s*Direct Plan"
 
 FUNDS = {
-    "equity": [(QSIF, "qsif Equity Long-Short Fund - Direct - Growth"),
-               (SW + "qsif-equity-long-short-fund-direct-growth", parse_stackwealth)],
-    "hybrid": [(QSIF, qsif_direct_growth("hybrid long-short")),
-               (SW + "qsif-hybrid-long-short-fund-direct-growth", parse_stackwealth)],
-    "aaa": [(QSIF, qsif_row(AAA_ROW)),
-            (SW + "qsif-active-asset-allocator-long-short-fund-direct-growth", parse_stackwealth)],
+    "equity": [(QSIF, "qsif Equity Long-Short Fund - Direct - Growth")],
+    "hybrid": [(QSIF, "qsif Hybrid Long-Short Fund - Regular - Growth"],
+    "aaa": [(QSIF, qsif_row(AAA_ROW))],
 }
 
 
