@@ -59,7 +59,7 @@ AAA_ROW = r"qsif Active Asset Allocator Long-Short Fund\s*-\s*Growth Option\s*-\
 
 FUNDS = {
     "equity": [(QSIF, "qsif Equity Long-Short Fund - Direct - Growth")],
-    "hybrid": [(QSIF, "qsif Hybrid Long-Short Fund - Regular - Growth"],
+    "hybrid": [(QSIF, "qsif Hybrid Long-Short Fund - Regular - Growth")],
     "aaa": [(QSIF, qsif_row(AAA_ROW))],
 }
 
