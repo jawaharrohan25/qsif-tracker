@@ -67,7 +67,7 @@ def scheme(name):
 FUNDS = {
     "equity": [(QSIF, scheme("qsif Equity Long-Short Fund - Direct - Growth"))],
     "hybrid": [(QSIF, scheme("qsif Hybrid Long-Short Fund - Direct - Growth"))],
-    "aaa":    [(QSIF, qsif_row(AAA_ROW))],
+    "aaa": [(QSIF, qsif_row(AAA_ROW))],
 }
 
 
@@ -137,7 +137,11 @@ def latest_reading(sources, getter):
 def run(getter, path=OUT):
     data = {}
     if os.path.exists(path):
-        data = json.load(open(path, encoding="utf-8"))
+        try:
+            data = json.load(open(path, encoding="utf-8"))
+        except ValueError as e:
+            print("nav.json is not valid JSON (%s). Starting a fresh one; the page keeps its built-in readings." % e)
+            data = {}
         if isinstance(data, list):
             data = {"equity": data}
     missing = []
