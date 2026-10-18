@@ -1,4 +1,4 @@
-import json, re, sys, os, html as H, datetime, urllib.request
+import json, re, sys, os, html as H, datetime, urllib.request, urllib.parse, http.cookiejar
 
 OUT = "nav.json"
 UA = {"User-Agent": "Mozilla/5.0"}
@@ -35,17 +35,77 @@ def qsif_row(name):
     return parse
 
 
+ROW = re.compile(r"(\d{2})-([A-Za-z]{3})-(\d{4})\s+(qsif .*?)\s+(Growth|Dividend)\s+([0-9]+\.[0-9]+)", re.I)
+
+
+def qsif_direct_growth(keyword, avoid=("ex-top", "sector", "idcw", "dividend")):
+    """Newest Direct-plan Growth row whose scheme name contains `keyword` (anywhere in the qsif.com NAV table)."""
+    def parse(page):
+        best = None
+        for m in ROW.finditer(plain(page)):
+            name = m.group(4).lower()
+            if keyword not in name or "direct" not in name or m.group(5).lower() != "growth":
+                continue
+            if any(a in name for a in avoid):
+                continue
+            d = "%s-%02d-%02d" % (m.group(3), MON[m.group(2).title()], int(m.group(1)))
+            if best is None or d > best[0]:
+                best = (d, float(m.group(6)))
+        return best
+    return parse
+
+
 AAA_ROW = r"qsif Active Asset Allocator Long-Short Fund\s*-\s*Growth Option\s*-\s*Direct Plan"
 
 FUNDS = {
-    "equity": [(SW + "qsif-equity-long-short-fund-direct-growth", parse_stackwealth)],
-    "hybrid": [(SW + "qsif-hybrid-long-short-fund-direct-growth", parse_stackwealth)],
+    "equity": [(QSIF, qsif_direct_growth("equity long-short")),
+               (SW + "qsif-equity-long-short-fund-direct-growth", parse_stackwealth)],
+    "hybrid": [(QSIF, qsif_direct_growth("hybrid long-short")),
+               (SW + "qsif-hybrid-long-short-fund-direct-growth", parse_stackwealth)],
     "aaa": [(QSIF, qsif_row(AAA_ROW)),
             (SW + "qsif-active-asset-allocator-long-short-fund-direct-growth", parse_stackwealth)],
 }
 
 
+def _read(opener, req):
+    return opener.open(req, timeout=30).read().decode("utf-8", "ignore")
+
+
+def fetch_qsif(url=QSIF, opener=None):
+    """The qsif.com NAV table is an ASP.NET grid with pages. Fetch page 1, then ask for every other numbered
+    page the same way a browser does (a form post with the hidden fields and the page link's event target).
+    Returns all the pages joined together so the row parsers can look through them."""
+    if opener is None:
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    first = _read(opener, urllib.request.Request(url, headers=UA))
+    pages = [first]
+    hidden = {}
+    for tag in re.findall(r"<input[^>]*>", first, flags=re.I):
+        if re.search(r'type=["\']?hidden', tag, flags=re.I):
+            n = re.search(r'name=["\']([^"\']+)', tag)
+            v = re.search(r'value=["\']([^"\']*)', tag)
+            if n:
+                hidden[n.group(1)] = H.unescape(v.group(1)) if v else ""
+    targets = []
+    for m in re.finditer(r"__doPostBack\((?:'|&#39;|&quot;)([^'&\"]+)(?:'|&#39;|&quot;)\s*,[^>]*>\s*(\d+)\s*</a>", first, flags=re.I):
+        if m.group(2) != "1" and m.group(1) not in targets:
+            targets.append(m.group(1))
+    if not targets:
+        targets = ["ctl00$ContentPlaceHolder1$nav_sch$ctl01$ctl01"]  # the page 2 link seen on qsif.com
+    for t in targets[:5]:
+        try:
+            form = dict(hidden); form["__EVENTTARGET"] = t; form["__EVENTARGUMENT"] = ""
+            req = urllib.request.Request(url, data=urllib.parse.urlencode(form).encode(), headers=dict(UA, **{"Content-Type": "application/x-www-form-urlencoded", "Referer": url}))
+            pages.append(_read(opener, req))
+        except Exception as e:
+            print("  could not load page of the qsif.com table:", t, e)
+    print("  qsif.com: read", len(pages), "page(s) of the NAV table")
+    return "\n".join(pages)
+
+
 def fetch(url):
+    if url == QSIF:
+        return fetch_qsif(url)
     req = urllib.request.Request(url, headers=UA)
     return urllib.request.urlopen(req, timeout=30).read().decode("utf-8", "ignore")
 
