@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<script src="firebase-config.js"></script>
 <title>qSIF Fund Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -55,14 +56,20 @@ header { display: flex; flex-direction: column; gap: 12px; }
 .num .v { font-family: var(--mono); font-size: 1.55rem; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .num .s { font-size: 0.8rem; color: var(--muted); }
 .gain { color: var(--gain); } .loss { color: var(--loss); }
+body.locked .wrap > *:not(#lock) { display: none !important; }
+#lock { display: none; max-width: 460px; margin: 12vh auto 0; }
+body.locked #lock { display: block; }
+.acct { font-size: 0.82rem; color: var(--muted); margin-top: 6px; }
+.tag { display: inline-block; font-size: 0.72rem; font-weight: 600; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--line); }
+.tag.buy { color: var(--gain); } .tag.sell { color: var(--loss); }
 .profs { margin: 14px 0 6px; }
 .profs button { padding: 6px 14px; }
 #imp[hidden] { display: none; }
 h3.sub { font-size: 0.95rem; margin: 18px 0 8px; }
 .inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
-input, textarea, button { font: inherit; color: var(--ink); }
-input, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 0.9rem; min-width: 0; width: 100%; }
+input, textarea, select, button { font: inherit; color: var(--ink); }
+input, textarea, select { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 0.9rem; min-width: 0; width: 100%; }
 textarea { min-height: 110px; resize: vertical; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button { cursor: pointer; background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 8px 14px; font-weight: 500; }
@@ -99,8 +106,14 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 </head>
 <body>
 <div class="wrap">
+  <section class="panel" id="lock" aria-labelledby="lockT">
+    <h2 id="lockT">Sign in to open your tracker</h2>
+    <p class="note" style="margin-top:0" id="lockMsg">Your holdings are private and are saved in your own account. Sign in with Google to see them.</p>
+    <div class="row"><button class="primary" id="signIn">Sign in with Google</button></div>
+  </section>
   <header>
     <div class="eyebrow">Quant Mutual Fund · Specialized Investment Funds · Direct Growth</div>
+    <div class="acct" id="acct" hidden><span id="acctWho"></span> · <span id="acctSave"></span> · <button class="link" id="signOut">Sign out</button></div>
     <div class="ranges profs" role="group" aria-label="Whose portfolio" id="profs"></div>
     <div class="tabs" role="tablist" aria-label="Fund" id="tabs"></div>
     <h1 id="fname"></h1>
@@ -120,6 +133,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
         <div class="num"><span class="eyebrow">Current value</span><span class="v" id="pVal">–</span><span class="s" id="pDates">–</span></div>
         <div class="num"><span class="eyebrow">Invested</span><span class="v" id="pCost">–</span><span class="s" id="pHeld">–</span></div>
         <div class="num"><span class="eyebrow">Gain / loss</span><span class="v" id="pGain">–</span><span class="s" id="pGainPct">–</span></div>
+        <div class="num"><span class="eyebrow">Realized from sales</span><span class="v" id="pReal">–</span><span class="s" id="pRealS">–</span></div>
       </div>
       <div>
         <div class="eyebrow">Share of portfolio value</div>
@@ -132,7 +146,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
       <div class="tablewrap"><table><thead><tr><th>Fund</th><th class="n">Units</th><th class="n">Avg buy NAV</th><th class="n">Latest NAV</th><th class="n">Invested (₹)</th><th class="n">Value (₹)</th><th class="n">Gain / loss</th><th class="n">Share</th></tr></thead><tbody id="pRows"></tbody></table></div>
       <p class="note">Totals use each fund's latest NAV and the purchases you add in that fund's tab (buy NAV shown is the average). A fund without a position is left out of the totals. A portfolio value chart over time needs NAVs for the same days across all funds, so it will make sense once the daily update has collected a few weeks of data.</p>
     </section>
-    <section class="panel" aria-labelledby="xfer">
+    <section class="panel" id="xferPanel" aria-labelledby="xfer">
       <h2 id="xfer">Use on another device</h2>
       <p class="note" style="margin-top:0">Your purchases live in this browser only. Make a link that carries them (both portfolios and any NAVs you added), then open it on your phone or another browser. The data is inside the link and is not stored anywhere else, so share it only with yourself.</p>
       <div class="row"><button class="primary" id="mkLink">Copy my data link</button><span id="linkMsg" role="status"></span></div>
@@ -149,15 +163,17 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
       <div class="num"><span class="eyebrow">Gain / loss</span><span class="v" id="gain">–</span><span class="s" id="gainPct">–</span></div>
       <div class="num"><span class="eyebrow">Below peak NAV</span><span class="v" id="dd">–</span><span class="s" id="peak">–</span></div>
     </div>
-    <h3 class="sub">Your purchases</h3>
-    <div class="tablewrap"><table><thead><tr><th>Date</th><th class="n">Units</th><th class="n">Buy NAV (₹)</th><th class="n">Cost (₹)</th><th class="n">Value now (₹)</th><th class="n">Gain / loss</th><th></th></tr></thead><tbody id="lotRows"></tbody></table></div>
+    <h3 class="sub">Your transactions</h3>
+    <div class="tablewrap"><table><thead><tr><th>Date</th><th>Type</th><th class="n">Units</th><th class="n">NAV (₹)</th><th class="n">Amount (₹)</th><th></th></tr></thead><tbody id="lotRows"></tbody></table></div>
+    <p class="note" id="soldNote"></p>
     <div class="inputs">
-      <label for="amt">Units bought<input id="amt" inputmode="decimal" placeholder="e.g. 90000.000"></label>
-      <label for="pnav">Purchase NAV (₹)<input id="pnav" inputmode="decimal" placeholder="e.g. 11.05"></label>
-      <label for="pdate">Purchase date (optional)<input id="pdate" type="date" value=""></label>
-      <button class="primary" id="addLot" style="align-self:flex-end">Add purchase</button>
+      <label for="ttype">Type<select id="ttype"><option value="buy">Buy</option><option value="sell">Sell</option></select></label>
+      <label for="amt">Units<input id="amt" inputmode="decimal" placeholder="e.g. 90000.000"></label>
+      <label for="pnav">NAV (₹)<input id="pnav" inputmode="decimal" placeholder="e.g. 11.05"></label>
+      <label for="pdate">Date<input id="pdate" type="date" value=""></label>
+      <button class="primary" id="addLot" style="align-self:flex-end">Add transaction</button>
     </div>
-    <p class="note" id="lotMsg" role="status">Add each purchase as its own line. The totals above add all lines together, and the Portfolio tab uses them too. Each fund keeps its own purchases in this browser.</p>
+    <p class="note" id="lotMsg" role="status">Add every buy and sell as its own line. A sale uses your oldest units first (first in, first out). The totals above and the Portfolio tab use what you still hold.</p>
   </section>
 
   <section class="panel" aria-labelledby="ch">
@@ -268,14 +284,33 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   var PROFS = [{ id: "me", name: "Jawahar portfolio", short: "Jawahar's" }, { id: "son", name: "Rohan portfolio", short: "Rohan's" }];
   var prof = lsGet("qsif-prof") === "son" ? "son" : "me";
   function profName() { return PROFS.filter(function (x) { return x.id === prof; })[0]; }
-  function lotsKey(f) { return prof === "me" ? "qsif-lots-" + f.id : "qsif-lots-son-" + f.id; }
-  function getLots(f) {
-    var l = readJSON(lotsKey(f), null);
-    if (Array.isArray(l)) return l.filter(function (x) { return x && x.u > 0 && x.n > 0; });
-    var st = storedPos(f), u = num(st.a), n = parseFloat(st.n);
-    if (prof !== "me") return [];
-    return u > 0 && n > 0 ? [{ u: u, n: n, d: st.d || "" }] : [];
+  function uid8() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-3); }
+  function todayISO() { var d = new Date(); return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+
+  /* Transactions: T["me|equity"] = [{id, t:"buy"|"sell", d, u, n}]. Holdings are worked out from them, oldest units sold first. */
+  var T = {};
+  function tkey(pid, f) { return pid + "|" + f.id; }
+  function txnsOf(pid, f) { var a = T[tkey(pid, f)]; return Array.isArray(a) ? a : []; }
+  function calc(list) {
+    var ord = list.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) {
+      var da = a.x.d || "", db = b.x.d || ""; if (da !== db) return da < db ? -1 : 1;
+      if (a.x.t !== b.x.t) return a.x.t === "buy" ? -1 : 1; return a.i - b.i;
+    });
+    var open = [], realized = 0, soldU = 0, proceeds = 0, bad = null;
+    ord.forEach(function (o) {
+      var x = o.x;
+      if (x.t !== "sell") { open.push({ u: x.u, n: x.n, d: x.d || "", id: x.id }); return; }
+      var need = x.u; soldU += x.u; proceeds += x.u * x.n;
+      while (need > 1e-9 && open.length) {
+        var l = open[0], take = Math.min(l.u, need);
+        realized += take * (x.n - l.n); l.u -= take; need -= take;
+        if (l.u <= 1e-9) open.shift();
+      }
+      if (need > 1e-6) bad = x;
+    });
+    return { open: open, realized: realized, soldU: soldU, proceeds: proceeds, bad: bad };
   }
+  function getLots(f) { return calc(txnsOf(prof, f)).open; }
   function agg(lots) {
     var u = 0, a = 0, d = "";
     lots.forEach(function (x) { u += x.u; a += x.u * x.n; if (x.d && (!d || x.d < d)) d = x.d; });
@@ -283,6 +318,39 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   }
   var lots = [];
   function pos() { return agg(lots); }
+
+  /* Older versions kept simple purchase lines per fund in this browser; turn them into buy transactions. */
+  function legacyLots(pid, f) {
+    var l = readJSON(pid === "me" ? "qsif-lots-" + f.id : "qsif-lots-son-" + f.id, null);
+    if (Array.isArray(l)) return l.filter(function (x) { return x && x.u > 0 && x.n > 0; });
+    if (pid !== "me") return [];
+    var st = storedPos(f), u = num(st.a), n = parseFloat(st.n);
+    return u > 0 && n > 0 ? [{ u: u, n: n, d: st.d || "" }] : [];
+  }
+  function legacyT() {
+    var o = {};
+    PROFS.forEach(function (pr) { FUNDS.forEach(function (f) {
+      var l = legacyLots(pr.id, f);
+      if (l.length) o[tkey(pr.id, f)] = l.map(function (x) { return { id: uid8(), t: "buy", d: x.d || "", u: x.u, n: x.n }; });
+    }); });
+    return o;
+  }
+  function cleanList(a) {
+    return (Array.isArray(a) ? a : []).map(function (x) {
+      return x && { id: String(x.id || uid8()), t: x.t === "sell" ? "sell" : "buy", d: /^\d{4}-\d{2}-\d{2}$/.test(x.d || "") ? x.d : "", u: +x.u, n: +x.n };
+    }).filter(function (x) { return x && x.u > 0 && x.n > 0; });
+  }
+
+  /* Where the data lives: in this browser, or (when Firebase is set up) in the signed-in account. */
+  var cloud = window.__qsifCloud || (window.QSIF_FIREBASE && window.QSIF_FIREBASE.apiKey ? makeCloud(window.QSIF_FIREBASE) : null), cloudUid = null;
+  function persist(pid, f) {
+    var k = tkey(pid, f);
+    if (!cloud) { lsSet("qsif-txn", JSON.stringify(T)); return; }
+    if (!cloudUid) return;
+    $("acctSave").textContent = "Saving…"; $("acctSave").className = "";
+    Promise.resolve(cloud.save(cloudUid, pid + "_" + f.id, T[k] || [])).then(function () { $("acctSave").textContent = "Saved to your account"; }, function (e) { $("acctSave").textContent = "Could not save: " + (e && e.message || e); $("acctSave").className = "loss"; });
+  }
+  if (!cloud) { var stT = readJSON("qsif-txn", null); T = stT && typeof stT === "object" && !Array.isArray(stT) ? stT : legacyT(); Object.keys(T).forEach(function (k) { T[k] = cleanList(T[k]); }); }
   function parseDate(t) {
     var m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     if (m) return m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
@@ -294,14 +362,13 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   }
   function navKey() { return "qsif-nav-" + cur.id; }
   function save() { lsSet(navKey(), JSON.stringify(user)); }
-  function saveLots() { lsSet(lotsKey(cur), JSON.stringify(lots)); }
 
   function loadFund(f) {
     cur = f; view = "fund"; lsSet("qsif-fund", f.id);
     $("fundView").hidden = false; $("portView").hidden = true;
     user = userNavs(f);
     lots = getLots(f);
-    $("amt").value = ""; $("pnav").value = ""; $("pdate").value = "";
+    $("amt").value = ""; $("pnav").value = ""; $("pdate").value = todayISO(); $("ttype").value = "buy";
     $("msg").textContent = "";
     $("pos").textContent = profName().short + " investment";
     $("fname").textContent = f.name;
@@ -312,6 +379,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   }
 
   function render() {
+    lots = getLots(cur);
     var data = all(), p = pos(), last = data[data.length - 1];
     var ok = p.u > 0 && p.n > 0;
     $("nav").textContent = "₹" + last.n.toFixed(4);
@@ -330,7 +398,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
       $("gainPct").textContent = pct(gp) + " on cost" + (p.d && p.k === 1 ? " since " + fmtDate(p.d) : "") + (p.k > 1 ? " across " + p.k + " purchases" : "") + extra;
     } else {
       $("val").textContent = "–"; $("gain").textContent = "–"; $("gain").className = "v";
-      $("units").textContent = "Add a purchase below"; $("gainPct").textContent = "";
+      $("units").textContent = txnsOf(prof, cur).length ? "No units held now" : "Add a transaction below"; $("gainPct").textContent = "";
     }
     lotTable(last);
     rows(data, p, ok); chart(data); compare(data);
@@ -419,13 +487,15 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   $("nClear").addEventListener("click", function () { niftyUser = []; lsSet("qsif-nifty", "[]"); $("nMsg").textContent = "Removed."; $("nMsg").className = "gain"; refresh(); });
 
   function lotTable(last) {
-    var h = "";
-    var order = lots.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) { return (a.x.d || "9999") < (b.x.d || "9999") ? -1 : 1; });
-    order.forEach(function (o) {
-      var x = o.x, c = x.u * x.n, v = x.u * last.n, g = v - c;
-      h += "<tr><td>" + (x.d ? fmtDate(x.d) : "–") + "</td><td class='n'>" + x.u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + "</td><td class='n'>" + x.n.toFixed(4) + "</td><td class='n'>" + Math.round(c).toLocaleString("en-IN") + "</td><td class='n'>" + Math.round(v).toLocaleString("en-IN") + "</td><td class='n " + (g < 0 ? "loss" : "gain") + "'>" + signedInr(g) + " (" + pct(g / c) + ")</td><td><button class='ghost' data-lot='" + o.i + "'>Remove</button></td></tr>";
+    var list = txnsOf(prof, cur), c = calc(list), h = "";
+    list.map(function (x, i) { return { x: x, i: i }; }).sort(function (a, b) {
+      var da = a.x.d || "", db = b.x.d || ""; return da !== db ? (da < db ? 1 : -1) : b.i - a.i;
+    }).forEach(function (o) {
+      var x = o.x;
+      h += "<tr><td>" + (x.d ? fmtDate(x.d) : "–") + "</td><td><span class='tag " + x.t + "'>" + (x.t === "sell" ? "Sell" : "Buy") + "</span></td><td class='n'>" + x.u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + "</td><td class='n'>" + x.n.toFixed(4) + "</td><td class='n'>" + Math.round(x.u * x.n).toLocaleString("en-IN") + "</td><td><button class='ghost' data-lot='" + x.id + "'>Remove</button></td></tr>";
     });
-    $("lotRows").innerHTML = h || "<tr><td colspan='7' class='n'>No purchases yet</td></tr>";
+    $("lotRows").innerHTML = h || "<tr><td colspan='6' class='n'>No transactions yet</td></tr>";
+    $("soldNote").textContent = c.soldU > 0 ? "Sold so far: " + c.soldU.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + " units for " + inr(c.proceeds) + ". Realized " + (c.realized < 0 ? "loss " : "gain ") + signedInr(c.realized) + " (first in, first out). Before any tax." : "";
   }
 
   function rows(data, p, ok) {
@@ -494,20 +564,26 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     });
   });
   function addLot() {
-    var u = num($("amt").value), n = parseFloat($("pnav").value), d = $("pdate").value;
-    var m = $("lotMsg");
-    if (!(u > 0) || !(n > 0)) { m.textContent = "Enter the units and the purchase NAV for this purchase."; m.className = "note loss"; return; }
-    lots.push({ u: u, n: n, d: d }); saveLots();
-    $("amt").value = ""; $("pnav").value = ""; $("pdate").value = "";
-    m.textContent = "Added " + u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + " units at ₹" + n.toFixed(4) + "."; m.className = "note gain";
+    var type = $("ttype").value === "sell" ? "sell" : "buy", u = num($("amt").value), n = parseFloat($("pnav").value), d = $("pdate").value, m = $("lotMsg");
+    var bad = function (t) { m.textContent = t; m.className = "note loss"; };
+    if (!(u > 0) || !(n > 0)) { bad("Enter the units and the NAV for this transaction."); return; }
+    if (!d) { bad("Pick the date of the transaction."); return; }
+    if (d > todayISO()) { bad("That date is in the future."); return; }
+    var cand = txnsOf(prof, cur).concat([{ id: uid8(), t: type, d: d, u: u, n: n }]);
+    if (calc(cand).bad) { bad("That sale is more than the units you held on that date."); return; }
+    T[tkey(prof, cur)] = cand; persist(prof, cur);
+    $("amt").value = ""; $("pnav").value = "";
+    m.textContent = (type === "sell" ? "Sold " : "Bought ") + u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + " units at ₹" + n.toFixed(4) + "."; m.className = "note gain";
     render();
   }
   $("addLot").addEventListener("click", addLot);
   ["amt", "pnav", "pdate"].forEach(function (id) { $(id).addEventListener("keydown", function (e) { if (e.key === "Enter") addLot(); }); });
   $("lotRows").addEventListener("click", function (e) {
-    var i = e.target.getAttribute && e.target.getAttribute("data-lot");
-    if (i === null || i === undefined) return;
-    lots.splice(+i, 1); saveLots(); render();
+    var id = e.target.getAttribute && e.target.getAttribute("data-lot");
+    if (!id) return;
+    var cand = txnsOf(prof, cur).filter(function (x) { return x.id !== id; });
+    if (calc(cand).bad) { $("lotMsg").textContent = "A later sale needs these units. Remove that sale first."; $("lotMsg").className = "note loss"; return; }
+    T[tkey(prof, cur)] = cand; persist(prof, cur); render();
   });
 
   function msg(t, bad) { $("msg").textContent = t; $("msg").className = bad ? "loss" : "gain"; }
@@ -553,14 +629,17 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   }
   function renderPortfolio() {
     var list = FUNDS.map(function (f, i) {
-      var data = allFor(f, userNavs(f)), last = data[data.length - 1], ag = agg(getLots(f));
+      var data = allFor(f, userNavs(f)), last = data[data.length - 1], cc = calc(txnsOf(prof, f)), ag = agg(cc.open);
       var u = ag.u, n = ag.n, ok = u > 0 && n > 0;
-      return { f: f, i: i, last: last, u: u, n: n, ok: ok, cost: ok ? ag.a : 0, val: ok ? u * last.n : 0 };
+      return { f: f, i: i, last: last, u: u, n: n, ok: ok, cost: ok ? ag.a : 0, val: ok ? u * last.n : 0, real: cc.realized, sold: cc.soldU > 0 };
     });
     var held = list.filter(function (x) { return x.ok; });
     var cost = 0, val = 0;
     held.forEach(function (x) { cost += x.cost; val += x.val; });
-    var g = val - cost;
+    var g = val - cost, real = 0, nsold = 0;
+    list.forEach(function (x) { real += x.real; if (x.sold) nsold++; });
+    if (nsold) { $("pReal").textContent = signedInr(real); $("pReal").className = "v " + (real < 0 ? "loss" : "gain"); $("pRealS").textContent = "from sales in " + nsold + " fund" + (nsold === 1 ? "" : "s"); }
+    else { $("pReal").textContent = "–"; $("pReal").className = "v"; $("pRealS").textContent = "no sales yet"; }
     $("pDates").textContent = dateRange(list.map(function (x) { return x.last.d; }));
     $("pHeld").textContent = held.length + " of " + list.length + " funds have a position";
     if (held.length) {
@@ -569,7 +648,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
       $("pGainPct").textContent = pct(g / cost) + " on cost";
     } else {
       $("pVal").textContent = "–"; $("pCost").textContent = "–"; $("pGain").textContent = "–"; $("pGain").className = "v";
-      $("pGainPct").textContent = "Enter units and purchase NAV in each fund tab";
+      $("pGainPct").textContent = "Add transactions in each fund tab";
     }
     var bar = "", leg = "";
     held.forEach(function (x) {
@@ -604,43 +683,42 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   /* Move purchases between devices through a link: the data rides in the part after # and never leaves the browser. */
   function b64e(str) { return btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
   function b64d(t) { t = t.replace(/-/g, "+").replace(/_/g, "/"); while (t.length % 4) t += "="; return decodeURIComponent(escape(atob(t))); }
-  function lotsOf(pid, f) { var keep = prof; prof = pid; var l = getLots(f); prof = keep; return l; }
   function buildPayload() {
-    var o = { v: 1, l: {}, n: {} };
+    var o = { v: 2, t: {}, n: {} };
     PROFS.forEach(function (pr) { FUNDS.forEach(function (f) {
-      var l = lotsOf(pr.id, f); if (l.length) o.l[pr.id + "|" + f.id] = l.map(function (x) { return [x.u, x.n, x.d || ""]; });
+      var l = txnsOf(pr.id, f); if (l.length) o.t[tkey(pr.id, f)] = l.map(function (x) { return [x.t, x.d || "", x.u, x.n]; });
     }); });
     FUNDS.forEach(function (f) { var u = userNavs(f); if (u.length) o.n[f.id] = u.map(function (x) { return [x.d, x.n]; }); });
     return o;
   }
-  function countLots(o) { var c = 0; for (var k in o.l) c += o.l[k].length; return c; }
+  function countLots(o) { var c = 0, k; for (k in (o.t || {})) c += o.t[k].length; for (k in (o.l || {})) c += o.l[k].length; return c; }
   $("mkLink").addEventListener("click", function () {
     var o = buildPayload(), url = location.href.split("#")[0] + "#d=" + b64e(JSON.stringify(o));
     $("linkBox").value = url;
     var n = countLots(o);
-    if (!n) { $("linkMsg").textContent = "No purchases saved here yet."; $("linkMsg").className = "loss"; return; }
-    var done = function () { $("linkMsg").textContent = "Link copied (" + n + " purchase" + (n === 1 ? "" : "s") + "). Send it to yourself and open it on the other device."; $("linkMsg").className = "gain"; };
+    if (!n) { $("linkMsg").textContent = "No transactions saved here yet."; $("linkMsg").className = "loss"; return; }
+    var done = function () { $("linkMsg").textContent = "Link copied (" + n + " transaction" + (n === 1 ? "" : "s") + "). Send it to yourself and open it on the other device."; $("linkMsg").className = "gain"; };
     var fail = function () { $("linkBox").focus(); $("linkBox").select(); $("linkMsg").textContent = "Select the link below and copy it."; $("linkMsg").className = "gain"; };
     try { navigator.clipboard.writeText(url).then(done, fail); } catch (e) { fail(); }
   });
   var incoming = null;
   try {
-    var hm = (location.hash || "").match(/^#d=([A-Za-z0-9_-]+)$/);
-    if (hm) { var o = JSON.parse(b64d(hm[1])); if (o && o.v === 1 && o.l) incoming = o; }
+    var hm = cloud ? null : (location.hash || "").match(/^#d=([A-Za-z0-9_-]+)$/);
+    if (hm) { var o = JSON.parse(b64d(hm[1])); if (o && (o.v === 1 || o.v === 2) && (o.l || o.t)) incoming = o; }
   } catch (e) { incoming = null; }
   if (incoming) {
-    $("impN").textContent = "This link carries " + countLots(incoming) + " purchase" + (countLots(incoming) === 1 ? "" : "s") + ". Loading it replaces the purchases saved in this browser for the funds it covers.";
+    $("impN").textContent = "This link carries " + countLots(incoming) + " transaction" + (countLots(incoming) === 1 ? "" : "s") + ". Loading it replaces the transactions saved in this browser for the funds it covers.";
     $("imp").hidden = false;
   }
   function closeImp() { $("imp").hidden = true; try { history.replaceState(null, "", location.href.split("#")[0]); } catch (e) {} }
   $("impNo").addEventListener("click", closeImp);
   $("impYes").addEventListener("click", function () {
     PROFS.forEach(function (pr) { FUNDS.forEach(function (f) {
-      var rows = incoming.l[pr.id + "|" + f.id];
+      var k = tkey(pr.id, f), rows = incoming.t ? incoming.t[k] : incoming.l && incoming.l[k];
       if (!rows) return;
-      var clean = rows.map(function (r) { return { u: +r[0], n: +r[1], d: /^\d{4}-\d{2}-\d{2}$/.test(r[2]) ? r[2] : "" }; }).filter(function (x) { return x.u > 0 && x.n > 0; });
-      lsSet((pr.id === "me" ? "qsif-lots-" : "qsif-lots-son-") + f.id, JSON.stringify(clean));
+      T[k] = cleanList(rows.map(function (r) { return incoming.t ? { t: r[0], d: r[1], u: r[2], n: r[3] } : { t: "buy", u: r[0], n: r[1], d: r[2] }; }));
     }); });
+    lsSet("qsif-txn", JSON.stringify(T));
     FUNDS.forEach(function (f) {
       var rows = incoming.n && incoming.n[f.id];
       if (!rows) return;
@@ -652,6 +730,28 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     if (view === "all") showPortfolio(); else loadFund(cur);
   });
 
+  function makeCloud(cfg) {
+    var base = "https://www.gstatic.com/firebasejs/10.12.2/", A, F, auth, db;
+    return {
+      init: function () {
+        return Promise.all([import(base + "firebase-app.js"), import(base + "firebase-auth.js"), import(base + "firebase-firestore.js")]).then(function (m) {
+          var app = m[0].initializeApp(cfg); A = m[1]; F = m[2]; auth = A.getAuth(app); db = F.getFirestore(app);
+        });
+      },
+      onUser: function (cb) { A.onAuthStateChanged(auth, cb); },
+      signIn: function () {
+        var pr = new A.GoogleAuthProvider();
+        return A.signInWithPopup(auth, pr).catch(function (e) {
+          if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment")) return A.signInWithRedirect(auth, pr);
+          throw e;
+        });
+      },
+      signOut: function () { return A.signOut(auth); },
+      watch: function (id, cb, err) { return F.onSnapshot(F.doc(db, "portfolios", id), function (s) { cb(s.exists() ? s.data() : null, s.metadata.hasPendingWrites); }, err); },
+      save: function (id, key, arr) { var o = { updated: Date.now(), t: {} }; o.t[key] = arr; return F.setDoc(F.doc(db, "portfolios", id), o, { merge: true }); }
+    };
+  }
+
   function drawProfs() {
     $("profs").innerHTML = PROFS.map(function (x) { return "<button class='ghost' data-p='" + x.id + "' aria-pressed='" + (x.id === prof ? "true" : "false") + "'>" + x.name + "</button>"; }).join("");
   }
@@ -662,6 +762,53 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     prof = id; lsSet("qsif-prof", id); drawProfs();
     if (view === "all") showPortfolio(); else loadFund(cur);
   });
+  /* Sign-in (only when firebase-config.js is present): the page stays locked until a user signs in; data lives in the account. */
+  function fromCloud(t) {
+    var o = {};
+    Object.keys(t || {}).forEach(function (k) {
+      var i = k.indexOf("_"); if (i < 1) return;
+      var arr = cleanList(t[k]); if (arr.length) o[k.slice(0, i) + "|" + k.slice(i + 1)] = arr;
+    });
+    return o;
+  }
+  function redrawAll() { if (view === "all") showPortfolio(); else render(); }
+  var unwatch = null;
+  function lockUI(msg, isErr) { document.body.classList.add("locked"); $("lockMsg").textContent = msg; $("lockMsg").className = "note" + (isErr ? " loss" : ""); $("signIn").hidden = false; $("acct").hidden = true; }
+  function onUser(u) {
+    if (unwatch) { try { unwatch(); } catch (e) {} unwatch = null; }
+    if (!u) { cloudUid = null; T = {}; lockUI("Your holdings are private and are saved in your own account. Sign in with Google to see them."); return; }
+    cloudUid = u.uid; $("signIn").hidden = true;
+    $("acctWho").textContent = "Signed in as " + (u.email || "your account"); $("acctSave").textContent = "Loading…"; $("acct").hidden = false;
+    var first = true;
+    unwatch = cloud.watch(u.uid, function (data, pending) {
+      if (data === null) {
+        // first time on this account: bring over anything saved earlier in this browser
+        var local = readJSON("qsif-txn", null);
+        T = local && typeof local === "object" && !Array.isArray(local) ? local : legacyT();
+        Object.keys(T).forEach(function (k) { T[k] = cleanList(T[k]); if (!T[k].length) delete T[k]; });
+        var n = Object.keys(T).length;
+        PROFS.forEach(function (pr) { FUNDS.forEach(function (f) { if (T[tkey(pr.id, f)]) persist(pr.id, f); }); });
+        $("acctSave").textContent = n ? "Moved the transactions saved in this browser to your account" : "Account ready";
+      } else if (!pending) {
+        T = fromCloud(data.t); $("acctSave").textContent = "Saved to your account";
+      } else { return; }
+      document.body.classList.remove("locked");
+      if (first) { first = false; document.body.classList.remove("locked"); }
+      redrawAll();
+    }, function (e) { lockUI("Could not open your data: " + String(e && e.message || e).replace(/\.$/, "") + ". If this says permission denied, check the Firestore rules.", true); $("signIn").hidden = false; });
+  }
+  $("signIn").addEventListener("click", function () {
+    if (!cloud) return;
+    $("lockMsg").textContent = "Opening Google sign-in…"; $("lockMsg").className = "note";
+    Promise.resolve(cloud.signIn()).catch(function (e) { lockUI("Sign-in did not finish: " + (e && e.message || e), true); });
+  });
+  $("signOut").addEventListener("click", function () { if (cloud) cloud.signOut(); });
+  if (cloud) {
+    $("xferPanel").hidden = true;
+    lockUI("Loading…", false); $("signIn").hidden = true;
+    Promise.resolve(cloud.init ? cloud.init() : null).then(function () { cloud.onUser(onUser); }).catch(function (e) { lockUI("Could not start sign-in: " + (e && e.message || e), true); });
+  }
+
   var startId = lsGet("qsif-fund"), start = null;
   FUNDS.forEach(function (f) { if (f.id === startId) start = f; });
   if (start) loadFund(start); else { loadFund(FUNDS[0]); showPortfolio(); }
