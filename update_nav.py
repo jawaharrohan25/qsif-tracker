@@ -57,9 +57,16 @@ def qsif_direct_growth(keyword, avoid=("ex-top", "sector", "idcw", "dividend")):
 
 AAA_ROW = r"qsif Active Asset Allocator Long-Short Fund\s*-\s*Growth Option\s*-\s*Direct Plan"
 
+def scheme(name):
+    """Row matcher for a scheme name exactly as qsif.com prints it, e.g. "qsif Equity Long-Short Fund - Direct - Growth".
+    Hyphens may have spaces around them or none, and spaces may be any whitespace."""
+    parts = [re.sub(r"(\\ )+", r"\\s+", re.escape(x)) for x in re.split(r"\s*-\s*", name.strip())]
+    return qsif_row(r"\s*-\s*".join(parts))
+
+
 FUNDS = {
-    "equity": [(QSIF, "qsif Equity Long-Short Fund - Direct - Growth")],
-    "hybrid": [(QSIF, "qsif Hybrid Long-Short Fund - Regular - Growth")],
+    "equity": [(QSIF, scheme("qsif Equity Long-Short Fund - Direct - Growth"))],
+    "hybrid": [(QSIF, scheme("qsif Hybrid Long-Short Fund - Direct - Growth"))],
     "aaa": [(QSIF, qsif_row(AAA_ROW))],
 }
 
