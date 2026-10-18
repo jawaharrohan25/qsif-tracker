@@ -1,12 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each person can only read and write their own portfolio document.
-    // Replace YOUR_GMAIL_ADDRESS with the Google account you sign in with, so nobody else can even create data here.
-    match /portfolios/{uid} {
+    // Only these Google accounts can read and write the shared portfolio.
+    // To add or remove a person, edit this list and publish.
+    match /portfolios/{doc} {
       allow read, write: if request.auth != null
-        && request.auth.uid == uid
-        && request.auth.token.email == 'jawaharrohan@gmail.com'
+        && request.auth.token.email in ['jawaharrohan@gmail.com', 'OTHER_PERSON@gmail.com']
         && request.auth.token.email_verified == true;
     }
     match /{document=**} {
@@ -14,10 +13,3 @@ service cloud.firestore {
     }
   }
 }
-
-   window.QSIF_FIREBASE = {
-     apiKey: "…copy from the box…",
-     authDomain: "qsif-tracker.firebaseapp.com",
-     projectId: "qsif-tracker",
-     appId: "…copy from the box…"
-   };

@@ -108,7 +108,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 <div class="wrap">
   <section class="panel" id="lock" aria-labelledby="lockT">
     <h2 id="lockT">Sign in to open your tracker</h2>
-    <p class="note" style="margin-top:0" id="lockMsg">Your holdings are private and are saved in your own account. Sign in with Google to see them.</p>
+    <p class="note" style="margin-top:0" id="lockMsg">Your holdings are private. Sign in with an approved Google account to see them.</p>
     <div class="row"><button class="primary" id="signIn">Sign in with Google</button></div>
   </section>
   <header>
@@ -348,7 +348,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     if (!cloud) { lsSet("qsif-txn", JSON.stringify(T)); return; }
     if (!cloudUid) return;
     $("acctSave").textContent = "Saving…"; $("acctSave").className = "";
-    Promise.resolve(cloud.save(cloudUid, pid + "_" + f.id, T[k] || [])).then(function () { $("acctSave").textContent = "Saved to your account"; }, function (e) { $("acctSave").textContent = "Could not save: " + (e && e.message || e); $("acctSave").className = "loss"; });
+    Promise.resolve(cloud.save(cloudUid, pid + "_" + f.id, T[k] || [])).then(function () { $("acctSave").textContent = "Saved to the shared account"; }, function (e) { $("acctSave").textContent = "Could not save: " + (e && e.message || e); $("acctSave").className = "loss"; });
   }
   if (!cloud) { var stT = readJSON("qsif-txn", null); T = stT && typeof stT === "object" && !Array.isArray(stT) ? stT : legacyT(); Object.keys(T).forEach(function (k) { T[k] = cleanList(T[k]); }); }
   function parseDate(t) {
@@ -776,11 +776,11 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   function lockUI(msg, isErr) { document.body.classList.add("locked"); $("lockMsg").textContent = msg; $("lockMsg").className = "note" + (isErr ? " loss" : ""); $("signIn").hidden = false; $("acct").hidden = true; }
   function onUser(u) {
     if (unwatch) { try { unwatch(); } catch (e) {} unwatch = null; }
-    if (!u) { cloudUid = null; T = {}; lockUI("Your holdings are private and are saved in your own account. Sign in with Google to see them."); return; }
-    cloudUid = u.uid; $("signIn").hidden = true;
+    if (!u) { cloudUid = null; T = {}; lockUI("Your holdings are private. Sign in with an approved Google account to see them."); return; }
+    cloudUid = (window.QSIF_FIREBASE && window.QSIF_FIREBASE.sharedDoc) || u.uid; $("signIn").hidden = true;
     $("acctWho").textContent = "Signed in as " + (u.email || "your account"); $("acctSave").textContent = "Loading…"; $("acct").hidden = false;
     var first = true;
-    unwatch = cloud.watch(u.uid, function (data, pending) {
+    unwatch = cloud.watch(cloudUid, function (data, pending) {
       if (data === null) {
         // first time on this account: bring over anything saved earlier in this browser
         var local = readJSON("qsif-txn", null);
@@ -790,7 +790,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
         PROFS.forEach(function (pr) { FUNDS.forEach(function (f) { if (T[tkey(pr.id, f)]) persist(pr.id, f); }); });
         $("acctSave").textContent = n ? "Moved the transactions saved in this browser to your account" : "Account ready";
       } else if (!pending) {
-        T = fromCloud(data.t); $("acctSave").textContent = "Saved to your account";
+        T = fromCloud(data.t); $("acctSave").textContent = "Saved to the shared account";
       } else { return; }
       document.body.classList.remove("locked");
       if (first) { first = false; document.body.classList.remove("locked"); }
