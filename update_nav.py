@@ -67,7 +67,7 @@ def scheme(name):
 FUNDS = {
     "equity": [(QSIF, scheme("qsif Equity Long-Short Fund - Direct - Growth"))],
     "hybrid": [(QSIF, scheme("qsif Hybrid Long-Short Fund - Direct - Growth"))],
-    "aaa": [(QSIF, qsif_row(AAA_ROW))],
+    "aaa":    [(QSIF, qsif_row(AAA_ROW))],
 }
 
 
