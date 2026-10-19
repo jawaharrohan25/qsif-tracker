@@ -22,7 +22,7 @@
   --loss: #c0392b;
   --c1: #1f3fd1;
   --c2: #0d9488;
-  --c3: #d97706;
+  --c3: #d97706; --c4: #7c3aed;
   --display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
   --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
@@ -30,12 +30,12 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0e1620; --surface: #16212d; --ink: #e8eef3; --muted: #8fa1af; --line: #2a3a49;
-    --accent: #7f95ff; --accent-soft: #1f2b4a; --gain: #4cc38a; --loss: #ff7b6b; --c1: #7f95ff; --c2: #3cc7b6; --c3: #f0a64a; color-scheme: dark;
+    --accent: #7f95ff; --accent-soft: #1f2b4a; --gain: #4cc38a; --loss: #ff7b6b; --c1: #7f95ff; --c2: #3cc7b6; --c3: #f0a64a; --c4: #b794f6; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e1620; --surface: #16212d; --ink: #e8eef3; --muted: #8fa1af; --line: #2a3a49;
-  --accent: #7f95ff; --accent-soft: #1f2b4a; --gain: #4cc38a; --loss: #ff7b6b; --c1: #7f95ff; --c2: #3cc7b6; --c3: #f0a64a; color-scheme: dark;
+  --accent: #7f95ff; --accent-soft: #1f2b4a; --gain: #4cc38a; --loss: #ff7b6b; --c1: #7f95ff; --c2: #3cc7b6; --c3: #f0a64a; --c4: #b794f6; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; padding: 24px 16px 48px; }
@@ -246,7 +246,8 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
       { d: "2026-10-05", n: 12.9939, s: "public page" },
       { d: "2026-10-09", n: 12.9635, s: "qsif.com" },
       { d: "2026-10-13", n: 13.0153, s: "qsif.com" }
-    ] }
+    ] },
+    { id: "ex100", name: "qSIF Equity Ex-Top 100 Long-Short Fund", tab: "Ex-Top 100", isin: "", launched: "", seed: [] }
   ];
   var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   var $ = function (id) { return document.getElementById(id); };
@@ -372,7 +373,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     $("msg").textContent = "";
     $("pos").textContent = profName().short + " investment";
     $("fname").textContent = f.name;
-    var c = "<span class='chip'>Direct · Growth</span>" + (f.isin ? "<span class='chip'>ISIN " + f.isin + "</span>" : "") + "<span class='chip'>Launched " + f.launched + "</span><span class='chip'>Min. ₹10 lakh</span>";
+    var c = "<span class='chip'>Direct · Growth</span>" + (f.isin ? "<span class='chip'>ISIN " + f.isin + "</span>" : "") + (f.launched ? "<span class='chip'>Launched " + f.launched + "</span>" : "") + "<span class='chip'>Min. ₹10 lakh</span>";
     $("chips").innerHTML = c;
     document.querySelectorAll(".tab").forEach(function (b) { b.setAttribute("aria-selected", b.getAttribute("data-f") === f.id ? "true" : "false"); });
     render();
@@ -382,6 +383,15 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     lots = getLots(cur);
     var data = all(), p = pos(), last = data[data.length - 1];
     var ok = p.u > 0 && p.n > 0;
+    if (!last) {
+      $("nav").textContent = "–"; $("navDate").textContent = "Waiting for the first NAV from qsif.com";
+      $("dd").textContent = "–"; $("dd").className = "v"; $("peak").textContent = "";
+      $("val").textContent = "–"; $("gain").textContent = "–"; $("gain").className = "v"; $("gainPct").textContent = "";
+      $("units").textContent = txnsOf(prof, cur).length ? "Value shows once a NAV is available" : "Add a transaction below";
+      lotTable(null); $("rows").innerHTML = "<tr><td colspan='5' class='n'>No NAV yet. The daily update adds it from qsif.com.</td></tr>";
+      $("chart").innerHTML = ""; $("cmp").innerHTML = ""; $("cmpLegend").innerHTML = ""; $("chartNote").textContent = "The chart appears once qsif.com has published a NAV for this fund.";
+      return;
+    }
     $("nav").textContent = "₹" + last.n.toFixed(4);
     $("navDate").textContent = "as on " + fmtDate(last.d);
     var peak = data.reduce(function (b, r) { return r.n > b.n ? r : b; }, data[0]);
@@ -612,10 +622,10 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     if (d) { user = user.filter(function (r) { return r.d !== d; }); save(); render(); }
   });
 
-  var COLORS = ["var(--c1)", "var(--c2)", "var(--c3)"];
+  var COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)"];
   function refresh() { if (view === "all") renderPortfolio(); else render(); }
   function dateRange(ds) {
-    ds = ds.slice().sort(); var a = ds[0], b = ds[ds.length - 1];
+    ds = ds.filter(Boolean).sort(); if (!ds.length) return "No NAV yet"; var a = ds[0], b = ds[ds.length - 1];
     return a === b ? "NAVs as on " + fmtDate(a) : "NAVs as on " + fmtDate(a) + " to " + fmtDate(b);
   }
   function showPortfolio() {
@@ -631,7 +641,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     var list = FUNDS.map(function (f, i) {
       var data = allFor(f, userNavs(f)), last = data[data.length - 1], cc = calc(txnsOf(prof, f)), ag = agg(cc.open);
       var u = ag.u, n = ag.n, ok = u > 0 && n > 0;
-      return { f: f, i: i, last: last, u: u, n: n, ok: ok, cost: ok ? ag.a : 0, val: ok ? u * last.n : 0, real: cc.realized, sold: cc.soldU > 0 };
+      return { f: f, i: i, last: last, u: u, n: n, ok: ok, cost: ok ? ag.a : 0, val: ok ? (last ? u * last.n : ag.a) : 0, real: cc.realized, sold: cc.soldU > 0 };
     });
     var held = list.filter(function (x) { return x.ok; });
     var cost = 0, val = 0;
@@ -640,7 +650,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     list.forEach(function (x) { real += x.real; if (x.sold) nsold++; });
     if (nsold) { $("pReal").textContent = signedInr(real); $("pReal").className = "v " + (real < 0 ? "loss" : "gain"); $("pRealS").textContent = "from sales in " + nsold + " fund" + (nsold === 1 ? "" : "s"); }
     else { $("pReal").textContent = "–"; $("pReal").className = "v"; $("pRealS").textContent = "no sales yet"; }
-    $("pDates").textContent = dateRange(list.map(function (x) { return x.last.d; }));
+    $("pDates").textContent = dateRange(list.map(function (x) { return x.last && x.last.d; }));
     $("pHeld").textContent = held.length + " of " + list.length + " funds have a position";
     if (held.length) {
       $("pVal").textContent = inr(val); $("pCost").textContent = inr(cost);
@@ -660,9 +670,9 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     var h = "";
     list.forEach(function (x) {
       var link = "<button class='link' data-go='" + x.f.id + "'>" + x.f.name.replace("qSIF ", "") + "</button>";
-      if (!x.ok) { h += "<tr><td>" + link + "</td><td colspan='3' class='n'>latest ₹" + x.last.n.toFixed(4) + "</td><td colspan='4' class='n'>no position entered</td></tr>"; return; }
+      if (!x.ok) { h += "<tr><td>" + link + "</td><td colspan='3' class='n'>" + (x.last ? "latest ₹" + x.last.n.toFixed(4) : "NAV pending") + "</td><td colspan='4' class='n'>no position entered</td></tr>"; return; }
       var g1 = x.val - x.cost;
-      h += "<tr><td>" + link + "</td><td class='n'>" + x.u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + "</td><td class='n'>" + x.n.toFixed(4) + "</td><td class='n'>" + x.last.n.toFixed(4) + "</td><td class='n'>" + Math.round(x.cost).toLocaleString("en-IN") + "</td><td class='n'>" + Math.round(x.val).toLocaleString("en-IN") + "</td><td class='n " + (g1 < 0 ? "loss" : "gain") + "'>" + signedInr(g1) + " (" + pct(g1 / x.cost) + ")</td><td class='n'>" + (val > 0 ? (x.val / val * 100).toFixed(1) : "0.0") + "%</td></tr>";
+      h += "<tr><td>" + link + "</td><td class='n'>" + x.u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + "</td><td class='n'>" + x.n.toFixed(4) + "</td><td class='n'>" + (x.last ? x.last.n.toFixed(4) : "pending") + "</td><td class='n'>" + Math.round(x.cost).toLocaleString("en-IN") + "</td><td class='n'>" + Math.round(x.val).toLocaleString("en-IN") + "</td><td class='n " + (g1 < 0 ? "loss" : "gain") + "'>" + signedInr(g1) + " (" + pct(g1 / x.cost) + ")</td><td class='n'>" + (val > 0 ? (x.val / val * 100).toFixed(1) : "0.0") + "%</td></tr>";
     });
     if (held.length) h += "<tr class='total'><td>Total</td><td></td><td></td><td></td><td class='n'>" + Math.round(cost).toLocaleString("en-IN") + "</td><td class='n'>" + Math.round(val).toLocaleString("en-IN") + "</td><td class='n " + (g < 0 ? "loss" : "gain") + "'>" + signedInr(g) + " (" + pct(g / cost) + ")</td><td class='n'>100%</td></tr>";
     $("pRows").innerHTML = h;

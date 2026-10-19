@@ -68,7 +68,12 @@ FUNDS = {
     "equity": [(QSIF, scheme("qsif Equity Long-Short Fund - Direct - Growth"))],
     "hybrid": [(QSIF, scheme("qsif Hybrid Long-Short Fund - Direct - Growth"))],
     "aaa": [(QSIF, qsif_row(AAA_ROW))],
+    "ex100": [(QSIF, scheme("qsif Equity Ex-Top 100 Long-Short Fund - Direct - Growth"))],
 }
+
+
+# A fund listed here can be absent from qsif.com (for example before its Direct plan is published) without failing the job.
+OPTIONAL = {"ex100"}
 
 
 def _read(opener, req):
@@ -150,7 +155,8 @@ def run(getter, path=OUT):
         got = latest_reading(sources, getter)
         if not got:
             print(fid, ": no reading")
-            missing.append(fid)
+            if fid not in OPTIONAL:
+                missing.append(fid)
         else:
             d, n = got
             rows = [r for r in rows if r["d"] != d]
