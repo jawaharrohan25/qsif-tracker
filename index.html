@@ -145,7 +145,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     </section>
     <section class="panel" aria-labelledby="pbreak">
       <h2 id="pbreak">By fund</h2>
-      <div class="tablewrap"><table><thead><tr><th>Fund</th><th class="n">Units</th><th class="n">Avg buy NAV</th><th class="n">Latest NAV</th><th class="n">Invested (₹)</th><th class="n">Value (₹)</th><th class="n">Gain / loss</th><th class="n">Share</th></tr></thead><tbody id="pRows"></tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>Fund</th><th class="n">Units</th><th class="n">Avg buy NAV</th><th class="n">Latest NAV</th><th class="n">Invested (₹)</th><th class="n">Value (₹)</th><th class="n">Gain / loss</th><th class="n">Day gain / loss</th><th class="n">Share</th></tr></thead><tbody id="pRows"></tbody></table></div>
       <p class="note">Totals use each fund's latest NAV and the purchases you add in that fund's tab (buy NAV shown is the average). A fund without a position is left out of the totals. A portfolio value chart over time needs NAVs for the same days across all funds, so it will make sense once the daily update has collected a few weeks of data.</p>
     </section>
     <section class="panel" id="xferPanel" aria-labelledby="xfer">
@@ -643,11 +643,12 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     var list = FUNDS.map(function (f, i) {
       var data = allFor(f, userNavs(f)), last = data[data.length - 1], cc = calc(txnsOf(prof, f)), ag = agg(cc.open);
       var u = ag.u, n = ag.n, ok = u > 0 && n > 0;
-      return { f: f, i: i, last: last, u: u, n: n, ok: ok, cost: ok ? ag.a : 0, val: ok ? (last ? u * last.n : ag.a) : 0, real: cc.realized, sold: cc.soldU > 0 };
+      var prev = data.length > 1 ? data[data.length - 2] : null;
+      return { f: f, i: i, last: last, prev: prev, u: u, n: n, ok: ok, cost: ok ? ag.a : 0, val: ok ? (last ? u * last.n : ag.a) : 0, day: ok && last && prev ? u * (last.n - prev.n) : null, real: cc.realized, sold: cc.soldU > 0 };
     });
     var held = list.filter(function (x) { return x.ok; });
-    var cost = 0, val = 0;
-    held.forEach(function (x) { cost += x.cost; val += x.val; });
+    var cost = 0, val = 0, dayTotal = 0, dayCount = 0;
+    held.forEach(function (x) { cost += x.cost; val += x.val; if (x.day !== null) { dayTotal += x.day; dayCount++; } });
     var g = val - cost, real = 0, nsold = 0;
     list.forEach(function (x) { real += x.real; if (x.sold) nsold++; });
     if (nsold) { $("pReal").textContent = signedInr(real); $("pReal").className = "v " + (real < 0 ? "loss" : "gain"); $("pRealS").textContent = "from sales in " + nsold + " fund" + (nsold === 1 ? "" : "s"); }
@@ -672,11 +673,11 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     var h = "";
     list.forEach(function (x) {
       var link = "<button class='link' data-go='" + x.f.id + "'>" + x.f.name.replace("qSIF ", "") + "</button>";
-      if (!x.ok) { h += "<tr><td>" + link + "</td><td colspan='3' class='n'>" + (x.last ? "latest ₹" + x.last.n.toFixed(4) : "NAV pending") + "</td><td colspan='4' class='n'>no position entered</td></tr>"; return; }
+      if (!x.ok) { h += "<tr><td>" + link + "</td><td colspan='3' class='n'>" + (x.last ? "latest ₹" + x.last.n.toFixed(4) : "NAV pending") + "</td><td colspan='5' class='n'>no position entered</td></tr>"; return; }
       var g1 = x.val - x.cost;
-      h += "<tr><td>" + link + "</td><td class='n'>" + x.u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + "</td><td class='n'>" + x.n.toFixed(4) + "</td><td class='n'>" + (x.last ? x.last.n.toFixed(4) : "pending") + "</td><td class='n'>" + Math.round(x.cost).toLocaleString("en-IN") + "</td><td class='n'>" + Math.round(x.val).toLocaleString("en-IN") + "</td><td class='n " + (g1 < 0 ? "loss" : "gain") + "'>" + signedInr(g1) + " (" + pct(g1 / x.cost) + ")</td><td class='n'>" + (val > 0 ? (x.val / val * 100).toFixed(1) : "0.0") + "%</td></tr>";
+      h += "<tr><td>" + link + "</td><td class='n'>" + x.u.toLocaleString("en-IN", { maximumFractionDigits: 3 }) + "</td><td class='n'>" + x.n.toFixed(4) + "</td><td class='n'>" + (x.last ? x.last.n.toFixed(4) : "pending") + "</td><td class='n'>" + Math.round(x.cost).toLocaleString("en-IN") + "</td><td class='n'>" + Math.round(x.val).toLocaleString("en-IN") + "</td><td class='n " + (g1 < 0 ? "loss" : "gain") + "'>" + signedInr(g1) + " (" + pct(g1 / x.cost) + ")</td><td class='n " + (x.day !== null && x.day < 0 ? "loss" : "gain") + "'>" + (x.day === null ? "–" : signedInr(x.day)) + "</td><td class='n'>" + (val > 0 ? (x.val / val * 100).toFixed(1) : "0.0") + "%</td></tr>";
     });
-    if (held.length) h += "<tr class='total'><td>Total</td><td></td><td></td><td></td><td class='n'>" + Math.round(cost).toLocaleString("en-IN") + "</td><td class='n'>" + Math.round(val).toLocaleString("en-IN") + "</td><td class='n " + (g < 0 ? "loss" : "gain") + "'>" + signedInr(g) + " (" + pct(g / cost) + ")</td><td class='n'>100%</td></tr>";
+    if (held.length) h += "<tr class='total'><td>Total</td><td></td><td></td><td></td><td class='n'>" + Math.round(cost).toLocaleString("en-IN") + "</td><td class='n'>" + Math.round(val).toLocaleString("en-IN") + "</td><td class='n " + (g < 0 ? "loss" : "gain") + "'>" + signedInr(g) + " (" + pct(g / cost) + ")</td><td class='n " + (dayTotal < 0 ? "loss" : "gain") + "'>" + (dayCount ? signedInr(dayTotal) : "–") + "</td><td class='n'>100%</td></tr>";
     $("pRows").innerHTML = h;
   }
   $("pRows").addEventListener("click", function (e) {
