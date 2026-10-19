@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1-day change, every scheme · qSIF Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#eef1f4;--surface:#fff;--ink:#12202b;--muted:#5b6b78;--line:#d5dce2;--accent:#1f3fd1;--gain:#0d7a4b;--loss:#c0392b;--display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1620;--surface:#16212d;--ink:#e8eef3;--muted:#8fa1af;--line:#2a3a49;--accent:#7f95ff;--gain:#4cc38a;--loss:#ff7b6b;color-scheme:dark}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);padding:24px 14px 48px}.wrap{max-width:720px;margin:auto;display:flex;flex-direction:column;gap:20px}header{display:flex;flex-direction:column;gap:4px}.eyebrow,th{font:500 .72rem var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}h1{font:700 clamp(1.65rem,4.5vw,2.2rem)/1.1 var(--display);margin:0;letter-spacing:-.02em}.back{align-self:flex-end;margin-top:-30px;color:var(--accent);text-decoration:none;font-size:.88rem}.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;min-width:0}.panel h2{font:500 .78rem var(--mono);letter-spacing:.07em;color:var(--muted);margin:0 0 16px;text-transform:uppercase}.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 16px}.num{min-width:0}.num .label{font:500 .72rem var(--mono);letter-spacing:.04em;color:var(--muted);text-transform:uppercase}.value{font:500 1.45rem var(--mono);margin-top:5px}.sub{font-size:.78rem;color:var(--muted);overflow-wrap:anywhere}.gain{color:var(--gain)}.loss{color:var(--loss)}.tablewrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);white-space:nowrap}th{font-weight:500}td{font-size:.84rem}td.n,th.n{text-align:right;font-family:var(--mono)}td:first-child{white-space:normal;min-width:150px}.note{font-size:.82rem;color:var(--muted);margin:12px 0 0}.note a{color:var(--accent)}#status{font-size:.85rem;color:var(--muted)}@media(max-width:540px){body{padding:18px 10px 32px}.panel{padding:15px}.nums{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 10px}.back{margin-top:5px;align-self:flex-start}th,td{padding:9px 6px}}
+</style></head>
+<body><main class="wrap">
+<header><div class="eyebrow">Quant Mutual Fund · Specialized Investment Funds · Direct Growth</div><h1>1-day change, every scheme</h1><a class="back" href="./">← Back to tracker</a></header>
+<section class="panel"><h2>Across all schemes</h2><div class="nums">
+<div class="num"><div class="label">Schemes up</div><div class="value gain" id="up">—</div><div class="sub" id="upNames">—</div></div>
+<div class="num"><div class="label">Schemes down</div><div class="value loss" id="down">—</div><div class="sub" id="downNames">—</div></div>
+<div class="num"><div class="label">Best day</div><div class="value gain" id="best">—</div><div class="sub" id="bestName">—</div></div>
+<div class="num"><div class="label">Worst day</div><div class="value loss" id="worst">—</div><div class="sub" id="worstName">—</div></div>
+</div></section>
+<section class="panel"><div class="tablewrap"><table><thead><tr><th>Scheme</th><th class="n">Latest NAV</th><th class="n">Prev NAV</th><th class="n">1-day change</th><th class="n">Δ NAV (₹)</th></tr></thead><tbody id="rows"><tr><td colspan="5" id="status">Loading NAV data…</td></tr></tbody></table></div><p class="note" id="foot">Change is measured against each scheme’s previous published NAV day (calendar days differ per scheme — for example Friday → Monday spans a weekend). Source: <code>nav.json</code> on this site, updated daily.</p></section>
+</main>
+<script>
+(function(){
+const funds=[['equity','qSIF Equity Long-Short Fund'],['hybrid','qSIF Hybrid Long-Short Fund'],['aaa','qSIF Active Asset Allocator Long-Short Fund'],['ex100','qSIF Equity Ex-Top 100 Long-Short Fund']];
+const $=id=>document.getElementById(id);const money=n=>Number(n).toFixed(4);const pct=n=>(n>0?'+':'')+n.toFixed(2)+'%';
+function setSummary(items){const up=items.filter(x=>x.pct>0),down=items.filter(x=>x.pct<0);$('up').textContent=up.length;$('down').textContent=down.length;$('upNames').textContent=up.map(x=>x.short).join(', ')||'—';$('downNames').textContent=down.map(x=>x.short).join(', ')||'—';const sorted=[...items].sort((a,b)=>b.pct-a.pct);const best=sorted[0],worst=sorted[sorted.length-1];if(best){$('best').textContent=pct(best.pct);$('bestName').textContent=best.short+' · '+best.latest.d;$('worst').textContent=pct(worst.pct);$('worstName').textContent=worst.short+' · '+worst.latest.d;}}
+function render(data){const items=[];funds.forEach(([id,name])=>{const raw=data[id];if(!Array.isArray(raw))return;const byDate=new Map();raw.forEach(x=>{if(x&&/^\d{4}-\d{2}-\d{2}$/.test(x.d)&&Number.isFinite(+x.n)&&+x.n>0)byDate.set(x.d,{d:x.d,n:+x.n});});const arr=[...byDate.values()].sort((a,b)=>a.d.localeCompare(b.d));if(arr.length<2)return;const latest=arr[arr.length-1],prev=arr[arr.length-2],delta=latest.n-prev.n,pct=delta/prev.n*100;items.push({id,name,short:name.replace(/^qSIF /,''),latest,prev,delta,pct});});
+if(!items.length){$('rows').innerHTML='<tr><td colspan="5">NAV data was loaded, but no scheme has at least two valid NAV records.</td></tr>';return;}
+setSummary(items);$('rows').innerHTML=items.sort((a,b)=>a.name.localeCompare(b.name)).map(x=>'<tr><td>'+x.name+'<div class="sub">'+x.latest.d+' vs '+x.prev.d+'</div></td><td class="n">₹'+money(x.latest.n)+'</td><td class="n">₹'+money(x.prev.n)+'</td><td class="n '+(x.pct>0?'gain':x.pct<0?'loss':'')+'">'+pct(x.pct)+'</td><td class="n '+(x.delta>0?'gain':x.delta<0?'loss':'')+'">'+(x.delta>0?'+':'')+x.delta.toFixed(4)+'</td></tr>').join('');}
+fetch('./nav.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('nav.json returned HTTP '+r.status);return r.json();}).then(data=>{if(Array.isArray(data))data={equity:data};render(data);}).catch(err=>{$('rows').innerHTML='<tr><td colspan="5">Could not load NAV data.</td></tr>';$('foot').textContent='Unable to read nav.json: '+err.message+'. Check that nav.json is deployed alongside this page.';});
+})();
+</script></body></html>
