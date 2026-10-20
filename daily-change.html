@@ -17,7 +17,6 @@
 <div class="num"><div class="label">Schemes down</div><div class="value loss" id="down">—</div><div class="sub" id="downNames">—</div></div>
 <div class="num"><div class="label">Best day</div><div class="value gain" id="best">—</div><div class="sub" id="bestName">—</div></div>
 <div class="num"><div class="label">Worst day</div><div class="value loss" id="worst">—</div><div class="sub" id="worstName">—</div></div>
-<div class="num"><div class="label">Nifty 50 day change</div><div class="value" id="niftyChange">—</div><div class="sub" id="niftyDates">Loading Nifty data…</div></div>
 </div></section>
 <section class="panel"><div class="tablewrap"><table><thead><tr><th>Scheme</th><th class="n">Latest NAV</th><th class="n">Prev NAV</th><th class="n">1-day change</th><th class="n">Δ NAV (₹)</th></tr></thead><tbody id="rows"><tr><td colspan="5" id="status">Loading NAV data…</td></tr></tbody></table></div><p class="note" id="foot">Change is measured against each scheme’s previous published NAV day (calendar days differ per scheme — for example Friday → Monday spans a weekend). Source: <code>nav.json</code> on this site, updated daily.</p></section>
 </main>
@@ -29,14 +28,6 @@ function setSummary(items){const up=items.filter(x=>x.pct>0),down=items.filter(x
 function render(data){const items=[];funds.forEach(([id,name])=>{const raw=data[id];if(!Array.isArray(raw))return;const byDate=new Map();raw.forEach(x=>{if(x&&/^\d{4}-\d{2}-\d{2}$/.test(x.d)&&Number.isFinite(+x.n)&&+x.n>0)byDate.set(x.d,{d:x.d,n:+x.n});});const arr=[...byDate.values()].sort((a,b)=>a.d.localeCompare(b.d));if(arr.length<2)return;const latest=arr[arr.length-1],prev=arr[arr.length-2],delta=latest.n-prev.n,pct=delta/prev.n*100;items.push({id,name,short:name.replace(/^qSIF /,''),latest,prev,delta,pct});});
 if(!items.length){$('rows').innerHTML='<tr><td colspan="5">NAV data was loaded, but no scheme has at least two valid NAV records.</td></tr>';return;}
 setSummary(items);$('rows').innerHTML=items.sort((a,b)=>a.name.localeCompare(b.name)).map(x=>'<tr><td>'+x.name+'<div class="sub">'+x.latest.d+' vs '+x.prev.d+'</div></td><td class="n">₹'+money(x.latest.n)+'</td><td class="n">₹'+money(x.prev.n)+'</td><td class="n '+(x.pct>0?'gain':x.pct<0?'loss':'')+'">'+pct(x.pct)+'</td><td class="n '+(x.delta>0?'gain':x.delta<0?'loss':'')+'">'+(x.delta>0?'+':'')+x.delta.toFixed(4)+'</td></tr>').join('');}
-fetch('./nifty.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('nifty.json returned HTTP '+r.status);return r.json();}).then(data=>{
-const byDate=new Map();if(Array.isArray(data))data.forEach(x=>{if(x&&/^\d{4}-\d{2}-\d{2}$/.test(x.d)&&Number.isFinite(+x.n)&&+x.n>0)byDate.set(x.d,{d:x.d,n:+x.n});});
-const arr=[...byDate.values()].sort((a,b)=>a.d.localeCompare(b.d));if(arr.length<2)throw new Error('fewer than two valid daily closes');
-const latest=arr[arr.length-1],prev=arr[arr.length-2],delta=latest.n-prev.n,change=delta/prev.n*100,sign=delta>0?'+':delta<0?'−':'';
-$('niftyChange').textContent=sign+Math.abs(delta).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})+' pts ('+(change>0?'+':change<0?'−':'')+Math.abs(change).toFixed(2)+'%)';
-$('niftyChange').className='value '+(delta>0?'gain':delta<0?'loss':'');
-$('niftyDates').textContent='Nifty 50 · '+latest.d+' vs '+prev.d;
-}).catch(err=>{$('niftyChange').textContent='—';$('niftyDates').textContent='Nifty data unavailable: '+err.message;});
 fetch('./nav.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('nav.json returned HTTP '+r.status);return r.json();}).then(data=>{if(Array.isArray(data))data={equity:data};render(data);}).catch(err=>{$('rows').innerHTML='<tr><td colspan="5">Could not load NAV data.</td></tr>';$('foot').textContent='Unable to read nav.json: '+err.message+'. Check that nav.json is deployed alongside this page.';});
 })();
 </script></body></html>
