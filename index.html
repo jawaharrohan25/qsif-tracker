@@ -110,6 +110,14 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     <h2 id="lockT">Sign in to open your tracker</h2>
     <p class="note" style="margin-top:0" id="lockMsg">Your holdings are private. Sign in with an approved Google account to see them.</p>
     <div class="row"><button class="primary" id="signIn">Sign in with Google</button></div>
+    <div style="border-top:1px solid var(--line);padding-top:14px;margin-top:4px;display:flex;flex-direction:column;gap:10px">
+      <h3 style="margin:0;font-size:.95rem">Or use email and password</h3>
+      <label>Email address<input id="authEmail" type="email" autocomplete="username" placeholder="rohan.jawaharlal@gmail.com"></label>
+      <label>Password<input id="authPassword" type="password" autocomplete="current-password" placeholder="Enter password"></label>
+      <div class="row"><button class="primary" id="emailSignIn">Sign in</button><button class="ghost" id="emailCreate">Create account</button><button class="ghost" id="emailReset">Reset password</button></div>
+      <button class="ghost" id="resendVerify" hidden>Resend verification email</button>
+      <p class="note">Only approved, email-verified accounts can access the shared portfolio. If you create an account, verify the email before signing in.</p>
+    </div>
     <p class="note"><a href="daily-change.html">View 1-day change across all schemes →</a></p>
   </section>
   <header>
@@ -128,11 +136,6 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     <div class="row"><button class="primary" id="impYes">Load it</button><button class="ghost" id="impNo">Ignore</button></div>
   </section>
 
-    <section class="panel" aria-labelledby="combinedMetricsTitle">
-      <h2 id="combinedMetricsTitle">Portfolio performance · Jawahar + Rohan</h2>
-      <p class="note" style="margin-top:0">Net gain/loss is current value minus cost of units still held. Day and monthly changes use current holdings and the relevant published NAVs. XIRR includes dated buys, sells and current holdings value.</p>
-      <div class="tablewrap"><table><thead><tr><th>Portfolio</th><th class="n">Net gain / loss</th><th class="n">Day gain / loss</th><th class="n">Monthly gain / loss</th><th class="n">Overall XIRR</th></tr></thead><tbody id="combinedMetricsRows"></tbody></table></div>
-    </section>
   <div class="stack" id="portView" hidden>
     <section class="panel" aria-labelledby="ptitle">
       <h2 id="ptitle">Total portfolio</h2>
@@ -147,6 +150,11 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
         <div class="alloc" id="pBar" role="img" aria-label="Share of portfolio value by fund" style="margin-top:8px"></div>
         <ul class="legend" id="pLegend"></ul>
       </div>
+    </section>
+    <section class="panel" aria-labelledby="combinedMetricsTitle">
+      <h2 id="combinedMetricsTitle">Portfolio performance · Jawahar + Rohan</h2>
+      <p class="note" style="margin-top:0">Net gain/loss is current value minus cost of units still held. Day and monthly changes use current holdings and the relevant published NAVs. XIRR includes dated buys, sells and current holdings value.</p>
+      <div class="tablewrap"><table><thead><tr><th>Portfolio</th><th class="n">Net gain / loss</th><th class="n">Day gain / loss</th><th class="n">Monthly gain / loss</th><th class="n">Overall XIRR</th></tr></thead><tbody id="combinedMetricsRows"></tbody></table></div>
     </section>
     <section class="panel" aria-labelledby="pbreak">
       <h2 id="pbreak">By fund</h2>
@@ -811,6 +819,10 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
           throw e;
         });
       },
+      emailSignIn: function (email, password) { return A.signInWithEmailAndPassword(auth, email, password); },
+      emailCreate: function (email, password) { return A.createUserWithEmailAndPassword(auth, email, password).then(function (cred) { return A.sendEmailVerification(cred.user).then(function () { return cred; }); }); },
+      emailReset: function (email) { return A.sendPasswordResetEmail(auth, email); },
+      resendVerification: function () { var u = auth.currentUser; return u ? A.sendEmailVerification(u) : Promise.reject(new Error("Sign in first.")); },
       signOut: function () { return A.signOut(auth); },
       watch: function (id, cb, err) { return F.onSnapshot(F.doc(db, "portfolios", id), function (s) { cb(s.exists() ? s.data() : null, s.metadata.hasPendingWrites); }, err); },
       save: function (id, key, arr) { var o = { updated: Date.now(), t: {} }; o.t[key] = arr; return F.setDoc(F.doc(db, "portfolios", id), o, { merge: true }); }
@@ -841,7 +853,13 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   function lockUI(msg, isErr) { document.body.classList.add("locked"); $("lockMsg").textContent = msg; $("lockMsg").className = "note" + (isErr ? " loss" : ""); $("signIn").hidden = false; $("acct").hidden = true; }
   function onUser(u) {
     if (unwatch) { try { unwatch(); } catch (e) {} unwatch = null; }
-    if (!u) { cloudUid = null; T = {}; lockUI("Your holdings are private. Sign in with an approved Google account to see them."); return; }
+    if (!u) { cloudUid = null; T = {}; lockUI("Your holdings are private. Sign in with an approved Google account or an approved, verified email account."); $("resendVerify").hidden = true; return; }
+    if (u.email && !u.emailVerified) {
+      lockUI("Please verify " + u.email + " using the link Firebase emailed you, then sign in again. Only approved verified emails can access the shared portfolio.", true);
+      $("resendVerify").hidden = false;
+      return;
+    }
+    $("resendVerify").hidden = true;
     cloudUid = (window.QSIF_FIREBASE && window.QSIF_FIREBASE.sharedDoc) || u.uid; $("signIn").hidden = true;
     $("acctWho").textContent = "Signed in as " + (u.email || "your account"); $("acctSave").textContent = "Loading…"; $("acct").hidden = false;
     var first = true;
@@ -866,6 +884,40 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     if (!cloud) return;
     $("lockMsg").textContent = "Opening Google sign-in…"; $("lockMsg").className = "note";
     Promise.resolve(cloud.signIn()).catch(function (e) { lockUI("Sign-in did not finish: " + (e && e.message || e), true); });
+  });
+  function authEmailValue() { return String($("authEmail").value || "").trim().toLowerCase(); }
+  function authPasswordValue() { return String($("authPassword").value || ""); }
+  function showAuthError(prefix, e) {
+    var code = e && e.code ? " [" + e.code + "]" : "";
+    lockUI(prefix + ": " + (e && e.message || "Unknown error") + code, true);
+  }
+  $("emailSignIn").addEventListener("click", function () {
+    if (!cloud) return;
+    var email = authEmailValue(), password = authPasswordValue();
+    if (!email || !password) { lockUI("Enter your email address and password.", true); return; }
+    $("lockMsg").textContent = "Signing in with email…";
+    cloud.emailSignIn(email, password).catch(function (e) { showAuthError("Email sign-in failed", e); });
+  });
+  $("emailCreate").addEventListener("click", function () {
+    if (!cloud) return;
+    var email = authEmailValue(), password = authPasswordValue();
+    if (!email || !password) { lockUI("Enter an email address and password to create an account.", true); return; }
+    if (password.length < 6) { lockUI("Firebase passwords must be at least 6 characters.", true); return; }
+    $("lockMsg").textContent = "Creating account and sending verification email…";
+    cloud.emailCreate(email, password).then(function () {
+      lockUI("Account created. Check " + email + " for the Firebase verification email, verify it, then sign in. Only approved email addresses can access portfolio data.", false);
+      $("resendVerify").hidden = false;
+    }).catch(function (e) { showAuthError("Account creation failed", e); });
+  });
+  $("emailReset").addEventListener("click", function () {
+    if (!cloud) return;
+    var email = authEmailValue();
+    if (!email) { lockUI("Enter your email address first, then choose Reset password.", true); return; }
+    cloud.emailReset(email).then(function () { lockUI("If a Firebase account exists for " + email + ", a password-reset email has been sent.", false); }).catch(function (e) { showAuthError("Password reset failed", e); });
+  });
+  $("resendVerify").addEventListener("click", function () {
+    if (!cloud) return;
+    cloud.resendVerification().then(function () { lockUI("Verification email sent. Open it, verify your address, then sign in again.", false); }).catch(function (e) { showAuthError("Could not resend verification email", e); });
   });
   $("signOut").addEventListener("click", function () { if (cloud) cloud.signOut(); });
   if (cloud) {
