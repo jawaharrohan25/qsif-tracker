@@ -128,6 +128,11 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     <div class="row"><button class="primary" id="impYes">Load it</button><button class="ghost" id="impNo">Ignore</button></div>
   </section>
 
+    <section class="panel" aria-labelledby="combinedMetricsTitle">
+      <h2 id="combinedMetricsTitle">Portfolio performance · Jawahar + Rohan</h2>
+      <p class="note" style="margin-top:0">Net gain/loss is current value minus cost of units still held. Day and monthly changes use current holdings and the relevant published NAVs. XIRR includes dated buys, sells and current holdings value.</p>
+      <div class="tablewrap"><table><thead><tr><th>Portfolio</th><th class="n">Net gain / loss</th><th class="n">Day gain / loss</th><th class="n">Monthly gain / loss</th><th class="n">Overall XIRR</th></tr></thead><tbody id="combinedMetricsRows"></tbody></table></div>
+    </section>
   <div class="stack" id="portView" hidden>
     <section class="panel" aria-labelledby="ptitle">
       <h2 id="ptitle">Total portfolio</h2>
@@ -382,6 +387,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   }
 
   function render() {
+    renderCombinedMetrics();
     lots = getLots(cur);
     var data = all(), p = pos(), last = data[data.length - 1];
     var ok = p.u > 0 && p.n > 0;
@@ -639,7 +645,53 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     document.querySelectorAll(".tab").forEach(function (b) { b.setAttribute("aria-selected", b.getAttribute("data-f") === "all" ? "true" : "false"); });
     renderPortfolio();
   }
+  function xirrEstimate(flows) {
+    flows = flows.filter(function (x) { return isFinite(x.a) && x.a !== 0 && x.d; }).sort(function (a,b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : 0; });
+    if (flows.length < 2 || !flows.some(function(x){return x.a < 0;}) || !flows.some(function(x){return x.a > 0;})) return null;
+    var start = new Date(flows[0].d + "T00:00:00Z").getTime();
+    function npv(rate) { return flows.reduce(function (sum, x) { var days = (new Date(x.d + "T00:00:00Z").getTime()-start)/86400000; return sum + x.a / Math.pow(1+rate, days/365); }, 0); }
+    var lo = -0.9999, hi = 10, flo = npv(lo), fhi = npv(hi);
+    if (!isFinite(flo) || !isFinite(fhi) || flo*fhi > 0) return null;
+    for (var i=0;i<160;i++) { var mid=(lo+hi)/2, fm=npv(mid); if (Math.abs(fm)<0.0001) return mid; if (flo*fm<=0) { hi=mid; fhi=fm; } else { lo=mid; flo=fm; } }
+    return (lo+hi)/2;
+  }
+  function portfolioMetrics(pid) {
+    var cost=0, value=0, day=0, dayBase=0, month=0, monthBase=0, hasDay=false, hasMonth=false, flows=[];
+    var today = new Date(), monthKey = today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0")+"-01";
+    FUNDS.forEach(function(f) {
+      var cc=calc(txnsOf(pid,f)), ag=agg(cc.open), data=allFor(f,userNavs(f)), last=data[data.length-1];
+      if (ag.u>0 && last) {
+        var v=ag.u*last.n; cost+=ag.a; value+=v;
+        var prev=data.length>1?data[data.length-2]:null;
+        if(prev){day+=ag.u*(last.n-prev.n);dayBase+=ag.u*prev.n;hasDay=true;}
+        var base=null; data.forEach(function(r){if(r.d<monthKey)base=r;});
+        if(base){month+=ag.u*(last.n-base.n);monthBase+=ag.u*base.n;hasMonth=true;}
+        flows.push({d:last.d,a:v});
+      }
+      txnsOf(pid,f).forEach(function(t){if(t.d) flows.push({d:t.d,a:t.t==='sell'?t.u*t.n:-t.u*t.n});});
+    });
+    return {cost:cost,value:value,gain:value-cost,gainPct:cost?(value-cost)/cost:null,day:hasDay?day:null,dayPct:dayBase?day/dayBase:null,month:hasMonth?month:null,monthPct:monthBase?month/monthBase:null,xirr:xirrEstimate(flows)};
+  }
+  function renderCombinedMetrics() {
+    var rows=[], combined={cost:0,value:0,day:0,dayBase:0,month:0,monthBase:0,hasDay:false,hasMonth:false,flows:[]};
+    function fmtMetric(amount, percent) { if(amount===null || amount===undefined) return "–"; return signedInr(amount)+" ("+(percent===null || percent===undefined?"–":pct(percent))+")"; }
+    PROFS.forEach(function(pr) {
+      var m=portfolioMetrics(pr.id);
+      rows.push("<tr><td>"+pr.name+"</td><td class='n "+(m.gain<0?'loss':'gain')+"'>"+fmtMetric(m.gain,m.gainPct)+"</td><td class='n "+(m.day!==null&&m.day<0?'loss':'gain')+"'>"+fmtMetric(m.day,m.dayPct)+"</td><td class='n "+(m.month!==null&&m.month<0?'loss':'gain')+"'>"+fmtMetric(m.month,m.monthPct)+"</td><td class='n "+(m.xirr!==null&&m.xirr<0?'loss':'gain')+"'>"+(m.xirr===null?'Not enough dated cash flows':pct(m.xirr))+"</td></tr>");
+      combined.cost+=m.cost;combined.value+=m.value;
+      if(m.day!==null){combined.day+=m.day;combined.hasDay=true;}
+      if(m.dayPct!==null&&m.day!==null) combined.dayBase+=m.day/m.dayPct;
+      if(m.month!==null){combined.month+=m.month;combined.hasMonth=true;}
+      if(m.monthPct!==null&&m.month!==null) combined.monthBase+=m.month/m.monthPct;
+      FUNDS.forEach(function(f){var cc=calc(txnsOf(pr.id,f)),ag=agg(cc.open),data=allFor(f,userNavs(f)),last=data[data.length-1]; if(ag.u>0&&last)combined.flows.push({d:last.d,a:ag.u*last.n}); txnsOf(pr.id,f).forEach(function(t){if(t.d)combined.flows.push({d:t.d,a:t.t==='sell'?t.u*t.n:-t.u*t.n});});});
+    });
+    var cg=combined.value-combined.cost, cd=combined.hasDay?combined.day:null, cmp=combined.dayBase?combined.day/combined.dayBase:null, cm=combined.hasMonth?combined.month:null, cmo=combined.monthBase?combined.month/combined.monthBase:null, cx=xirrEstimate(combined.flows);
+    rows.push("<tr class='total'><td>Jawahar + Rohan</td><td class='n "+(cg<0?'loss':'gain')+"'>"+fmtMetric(cg,combined.cost?(cg/combined.cost):null)+"</td><td class='n "+(cd!==null&&cd<0?'loss':'gain')+"'>"+fmtMetric(cd,cmp)+"</td><td class='n "+(cm!==null&&cm<0?'loss':'gain')+"'>"+fmtMetric(cm,cmo)+"</td><td class='n "+(cx!==null&&cx<0?'loss':'gain')+"'>"+(cx===null?'Not enough dated cash flows':pct(cx))+"</td></tr>");
+    $("combinedMetricsRows").innerHTML=rows.join("");
+  }
+
   function renderPortfolio() {
+    renderCombinedMetrics();
     var list = FUNDS.map(function (f, i) {
       var data = allFor(f, userNavs(f)), last = data[data.length - 1], cc = calc(txnsOf(prof, f)), ag = agg(cc.open);
       var u = ag.u, n = ag.n, ok = u > 0 && n > 0;
