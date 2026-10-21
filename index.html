@@ -206,13 +206,14 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
   </section>
 
   <section class="panel" aria-labelledby="cm">
-    <div class="bar"><h2 id="cm">Compared with Nifty 50</h2></div>
-    <p class="note" style="margin-top:0" id="cmpSub">Both lines start at 100 on the first day they share in the date range chosen above.</p>
-    <div class="chartbox"><svg id="cmp" viewBox="0 0 760 280" role="img" aria-label="Fund and Nifty 50 compared, both starting at 100"></svg></div>
+    <div class="bar"><h2 id="cm">Compared with Nifty 50 and Nifty 500 TRI</h2></div>
+    <p class="note" style="margin-top:0" id="cmpSub">Each series starts at 100 on the first common date in the selected range. Nifty 500 TRI includes reinvested dividends; Nifty 50 is the existing price-index series.</p>
+    <div class="chartbox"><svg id="cmp" viewBox="0 0 760 280" role="img" aria-label="Fund, Nifty 50 and Nifty 500 TRI comparison, normalized to 100"></svg></div>
     <ul class="legend" id="cmpLegend"></ul>
     <div class="nums" style="margin-top:14px">
       <div class="num"><span class="eyebrow">Fund return</span><span class="v" id="cmFund">–</span><span class="s" id="cmFundS">–</span></div>
       <div class="num"><span class="eyebrow">Nifty 50 return</span><span class="v" id="cmNifty">–</span><span class="s" id="cmNiftyS">–</span></div>
+      <div class="num"><span class="eyebrow">Nifty 500 TRI return</span><span class="v" id="cmN500">–</span><span class="s" id="cmN500S">–</span></div>
       <div class="num"><span class="eyebrow">Correlation</span><span class="v" id="cmCorr">–</span><span class="s" id="cmCorrS">–</span></div>
       <div class="num"><span class="eyebrow">Beta to Nifty</span><span class="v" id="cmBeta">–</span><span class="s" id="cmBetaS">–</span></div>
     </div>
@@ -430,13 +431,14 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     rows(data, p, ok); chart(data); compare(data);
   }
 
-  /* Nifty 50: the hosted site keeps nifty.json up to date; you can also paste values. Both are merged by date. */
-  var niftyServed = [], niftyUser = readJSON("qsif-nifty", []);
-  function niftyAll() {
+  /* Official Nifty 500 TRI history is stored in nifty500tri.json and refreshed by GitHub Actions. */
+  var niftyServed = [], niftyUser = readJSON("qsif-nifty", []), n500Served = [];
+  function seriesMap(rows) {
     var m = {};
-    niftyServed.concat(Array.isArray(niftyUser) ? niftyUser : []).forEach(function (r) { if (r && r.n > 0 && /^\d{4}-\d{2}-\d{2}$/.test(r.d)) m[r.d] = r.n; });
+    (Array.isArray(rows) ? rows : []).forEach(function (r) { if (r && r.n > 0 && /^\d{4}-\d{2}-\d{2}$/.test(r.d)) m[r.d] = +r.n; });
     return m;
   }
+  function niftyAll() { var m = seriesMap(niftyServed); Object.keys(seriesMap(niftyUser)).forEach(function(d){m[d]=seriesMap(niftyUser)[d];}); return m; }
   function pearson(a, b) {
     var n = a.length, ma = 0, mb = 0, i;
     for (i = 0; i < n; i++) { ma += a[i]; mb += b[i]; }
@@ -447,46 +449,41 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     return { r: sab / Math.sqrt(saa * sbb), beta: sab / sbb };
   }
   function compare(data) {
-    var nm = niftyAll(), set = function (id, t, c) { $(id).textContent = t; if (c !== undefined) $(id).className = "v " + c; };
+    var nm = niftyAll(), tm = seriesMap(n500Served), set = function (id, t, c) { $(id).textContent = t; if (c !== undefined) $(id).className = "v " + c; };
     var last = ms(data[data.length - 1].d);
-    var win = data.filter(function (r) { return nm[r.d] && (!range || ms(r.d) >= last - range * 864e5); });
+    var win = data.filter(function (r) { return nm[r.d] && tm[r.d] && (!range || ms(r.d) >= last - range * 864e5); });
     var svgc = $("cmp"); svgc.innerHTML = ""; $("cmpLegend").innerHTML = "";
-    ["cmFund", "cmNifty", "cmCorr", "cmBeta"].forEach(function (id) { set(id, "–", ""); $(id + "S").textContent = "–"; });
-    $("cmBetaS").textContent = "–";
+    ["cmFund", "cmNifty", "cmN500", "cmCorr", "cmBeta"].forEach(function (id) { set(id, "–", ""); $(id + "S").textContent = "–"; });
     if (win.length < 2) {
-      $("cmNote").textContent = Object.keys(nm).length ? "Fewer than two days in this range have both a NAV and a Nifty value, so there is nothing to compare yet." : "No Nifty 50 values yet. On the hosted site the daily update adds them. Until then you can paste them below (Add Nifty 50 closing values yourself).";
+      $("cmNote").textContent = "Nifty 50 and Nifty 500 TRI are compared only on dates where NAV and both benchmarks are available. If the chart is empty, wait for the official Nifty 500 TRI history import to complete.";
       return;
     }
-    var f0 = win[0].n, n0 = nm[win[0].d];
-    var fs = win.map(function (r) { return r.n / f0 * 100; }), ns = win.map(function (r) { return nm[r.d] / n0 * 100; });
+    var f0 = win[0].n, n0 = nm[win[0].d], t0 = tm[win[0].d];
+    var fs = win.map(function (r) { return r.n / f0 * 100; }), ns = win.map(function (r) { return nm[r.d] / n0 * 100; }), ts = win.map(function (r) { return tm[r.d] / t0 * 100; });
     var W = 760, H = 280, L = 52, R = 16, T = 14, B = 32;
     var x0 = ms(win[0].d), x1 = ms(win[win.length - 1].d); if (x1 === x0) x1 += 864e5;
-    var lo = Math.min.apply(null, fs.concat(ns)), hi = Math.max.apply(null, fs.concat(ns));
+    var all = fs.concat(ns,ts), lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
     var pad = (hi - lo) * 0.12 || 1; lo = Math.floor((lo - pad) * 2) / 2; hi = Math.ceil((hi + pad) * 2) / 2;
     var X = function (t) { return L + (t - x0) / (x1 - x0) * (W - L - R); }, Y = function (v) { return T + (hi - v) / (hi - lo) * (H - T - B); };
     var g = "", i;
     for (i = 0; i <= 4; i++) { var yv = lo + (hi - lo) * i / 4, yy = Y(yv); g += "<line x1='" + L + "' x2='" + (W - R) + "' y1='" + yy + "' y2='" + yy + "' stroke='var(--line)' stroke-width='1'/><text x='" + (L - 8) + "' y='" + (yy + 4) + "' text-anchor='end'>" + yv.toFixed(1) + "</text>"; }
     for (i = 0; i <= 4; i++) { var t = x0 + (x1 - x0) * i / 4, dt = new Date(t); g += "<text x='" + X(t) + "' y='" + (H - 10) + "' text-anchor='" + (i === 0 ? "start" : i === 4 ? "end" : "middle") + "'>" + dt.getUTCDate() + " " + MON[dt.getUTCMonth()] + " " + String(dt.getUTCFullYear()).slice(2) + "</text>"; }
     if (100 >= lo && 100 <= hi) g += "<line x1='" + L + "' x2='" + (W - R) + "' y1='" + Y(100) + "' y2='" + Y(100) + "' stroke='var(--muted)' stroke-width='1' stroke-dasharray='4 4'/>";
-    var line = function (vals, col) { return "<path d='" + vals.map(function (v, k) { return (k ? "L" : "M") + X(ms(win[k].d)).toFixed(1) + " " + Y(v).toFixed(1); }).join(" ") + "' fill='none' stroke='" + col + "' stroke-width='2' stroke-linejoin='round'/>"; };
-    g += line(ns, "var(--c2)") + line(fs, "var(--c1)");
-    var dot = function (v, col) { return "<circle cx='" + X(ms(win[win.length - 1].d)).toFixed(1) + "' cy='" + Y(v).toFixed(1) + "' r='4' fill='var(--surface)' stroke='" + col + "' stroke-width='2'/>"; };
-    g += dot(ns[ns.length - 1], "var(--c2)") + dot(fs[fs.length - 1], "var(--c1)");
+    var line = function (vals, col) { return "<path d='" + vals.map(function (v, k) { return (k ? "L" : "M") + X(ms(win[k].d).toFixed(1)) + " " + Y(v).toFixed(1); }).join(" ") + "' fill='none' stroke='" + col + "' stroke-width='2' stroke-linejoin='round'/>"; };
+    g += line(ns, "var(--c2)") + line(ts, "var(--c3)") + line(fs, "var(--c1)");
     svgc.innerHTML = g;
-    var fr = fs[fs.length - 1] / 100 - 1, nr = ns[ns.length - 1] / 100 - 1;
-    $("cmpLegend").innerHTML = "<li><span class='sw' style='background:var(--c1)'></span>" + cur.tab + " " + pct(fr) + "</li><li><span class='sw' style='background:var(--c2)'></span>Nifty 50 " + pct(nr) + "</li>";
+    var fr = fs[fs.length - 1] / 100 - 1, nr = ns[ns.length - 1] / 100 - 1, tr = ts[ts.length - 1] / 100 - 1;
+    $("cmpLegend").innerHTML = "<li><span class='sw' style='background:var(--c1)'></span>" + cur.tab + " " + pct(fr) + "</li><li><span class='sw' style='background:var(--c2)'></span>Nifty 50 " + pct(nr) + "</li><li><span class='sw' style='background:var(--c3)'></span>Nifty 500 TRI " + pct(tr) + "</li>";
     var span = fmtDate(win[0].d) + " to " + fmtDate(win[win.length - 1].d);
     set("cmFund", pct(fr), fr < 0 ? "loss" : "gain"); $("cmFundS").textContent = span;
-    set("cmNifty", pct(nr), nr < 0 ? "loss" : "gain"); $("cmNiftyS").textContent = "from " + nm[win[0].d].toLocaleString("en-IN", { maximumFractionDigits: 2 }) + " to " + nm[win[win.length - 1].d].toLocaleString("en-IN", { maximumFractionDigits: 2 });
+    set("cmNifty", pct(nr), nr < 0 ? "loss" : "gain"); $("cmNiftyS").textContent = "price index";
+    set("cmN500", pct(tr), tr < 0 ? "loss" : "gain"); $("cmN500S").textContent = "total return incl. dividends";
     var fr1 = [], nr1 = [];
     for (i = 1; i < win.length; i++) { fr1.push(win[i].n / win[i - 1].n - 1); nr1.push(nm[win[i].d] / nm[win[i - 1].d] - 1); }
     var st = fr1.length >= 2 ? pearson(fr1, nr1) : null, few = fr1.length < 20;
-    if (st) {
-      set("cmCorr", st.r.toFixed(2)); set("cmBeta", st.beta.toFixed(2));
-      $("cmCorrS").textContent = "daily returns, " + fr1.length + " days";
-      $("cmBetaS").textContent = st.beta >= 1 ? "moves more than Nifty" : st.beta > 0 ? "moves less than Nifty" : "moves against Nifty";
-    } else { $("cmCorrS").textContent = "needs at least 3 shared days"; }
-    $("cmNote").textContent = (few ? "Only " + win.length + " shared days, so correlation and beta are not reliable yet. " : "") + "Correlation near 1 means the fund tends to move with Nifty on the same days, near 0 means little link, below 0 means opposite. Beta is how many percent the fund has moved for each 1% move in Nifty. Past behaviour, not a forecast.";
+    if (st) { set("cmCorr", st.r.toFixed(2)); set("cmBeta", st.beta.toFixed(2)); $("cmCorrS").textContent = "daily returns vs Nifty 50, " + fr1.length + " days"; $("cmBetaS").textContent = st.beta >= 1 ? "moves more than Nifty" : st.beta > 0 ? "moves less than Nifty" : "moves against Nifty"; }
+    else { $("cmCorrS").textContent = "needs at least 3 shared days"; }
+    $("cmNote").textContent = (few ? "Only " + win.length + " shared days, so correlation and beta are not reliable yet. " : "") + "The comparison uses dates shared by the NAV, Nifty 50 and Nifty 500 TRI. Nifty 500 TRI includes reinvested dividends; the current Nifty 50 series is a price index. Past performance is not a forecast.";
   }
   function niftyLine(line) {
     var m = line.match(/^\s*([^,\t;]+?)\s*[,\t;]\s*(.+?)\s*$/);
@@ -947,6 +944,13 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
     fetch("nifty.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
       if (!Array.isArray(j)) return;
       niftyServed = j.filter(function (x) { return x && /^\d{4}-\d{2}-\d{2}$/.test(x.d) && x.n > 0; });
+      refresh();
+    }).catch(function () {});
+  } catch (e) {}
+  try {
+    fetch("nifty500tri.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!Array.isArray(j)) return;
+      n500Served = j.filter(function (x) { return x && /^\d{4}-\d{2}-\d{2}$/.test(x.d) && x.n > 0; });
       refresh();
     }).catch(function () {});
   } catch (e) {}
