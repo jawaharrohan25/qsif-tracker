@@ -15,4 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 update_nav.py
-      
+      - run: |
+          git config user.name "nav-bot"
+          git config user.email "nav-bot@users.noreply.github.com"
+          git add nav.json
+          if [ -f nifty.json ]; then git add nifty.json; fi
+          git diff --cached --quiet || (git commit -m "Update NAV" && git push)
