@@ -9,15 +9,29 @@ HEADERS = {
     "Content-Type": "application/json; charset=utf-8",
     "Referer": "https://www.niftyindices.com/reports/historical-data",
     "Origin": "https://www.niftyindices.com",
-    "User-Agent": "Mozilla/5.0 (compatible; QSIFTracker/1.0)"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+    "X-Requested-With": "XMLHttpRequest",
+    "Accept": "application/json, text/javascript, */*; q=0.01"
 }
 
 def request_chunk(start, end):
-    inner = "{'name':'NIFTY 500','startDate':'%s','endDate':'%s','indexName':'NIFTY 500'}" % (start.strftime('%d %b %Y'), end.strftime('%d %b %Y'))
+    inner = "{'name':'NIFTY 500','startDate':'%s','endDate':'%s','indexName':'NIFTY 500'}" % (start.strftime('%d-%b-%Y'), end.strftime('%d-%b-%Y'))
     body = json.dumps({"cinfo": inner}).encode()
     req = urllib.request.Request(URL, data=body, headers=HEADERS, method="POST")
-    with urllib.request.urlopen(req, timeout=45) as r:
-        outer = json.loads(r.read().decode('utf-8'))
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            raw = r.read().decode('utf-8', errors='replace')
+            status = r.status
+    except Exception as exc:
+        raise RuntimeError(f"NSE TRI request failed for {start} to {end}: {exc}") from exc
+    try:
+        outer = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        sample = raw[:240].replace("\\n", " ").replace("\\r", " ")
+        raise RuntimeError(
+            f"NSE returned a non-JSON response for {start} to {end} (HTTP {status}). "
+            f"This may be a bot-protection or endpoint response. Response starts: {sample!r}"
+        ) from exc
     payload = outer.get('d', '[]')
     if isinstance(payload, str):
         if payload.lower() == 'false' or payload == '[]': return []
