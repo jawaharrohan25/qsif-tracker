@@ -14,8 +14,8 @@
 <header><div class="eyebrow">Quant Mutual Fund · Specialized Investment Funds · Direct Growth</div><h1>1-day change, every scheme</h1><a class="back" href="./">← Back to tracker</a></header>
 <section class="panel"><h2>Market benchmarks · daily change</h2><div class="nums">
 <div class="num"><div class="label">Nifty 50</div><div class="value" id="nifty50Change">—</div><div class="sub" id="nifty50Dates">Loading index data…</div></div>
-<div class="num"><div class="label">Nifty 500 TRI</div><div class="value" id="nifty500Change">—</div><div class="sub" id="nifty500Dates">Waiting for historical TRI data</div></div>
-</div><p class="note" id="marketNote">Daily change is calculated from the latest two available index observations. Nifty 500 TRI requires a valid daily historical TRI file named <code>nifty500tri.json</code>.</p></section>
+<div class="num"><div class="label">Nifty 500</div><div class="value" id="nifty500Change">—</div><div class="sub" id="nifty500Dates">Waiting for historical index data</div></div>
+</div><p class="note" id="marketNote">Daily change is calculated from the latest two available index observations. Nifty 500 requires a valid daily historical index file named <code>nifty500.json</code>.</p></section>
 <section class="panel"><h2>Across all schemes</h2><div class="nums">
 <div class="num"><div class="label">Schemes up</div><div class="value gain" id="up">—</div><div class="sub" id="upNames">—</div></div>
 <div class="num"><div class="label">Schemes down</div><div class="value loss" id="down">—</div><div class="sub" id="downNames">—</div></div>
@@ -38,7 +38,7 @@ function renderIndexChange(file, valueId, datesId, label){
   }).catch(err=>{$(valueId).textContent='—';$(valueId).className='value';$(datesId).textContent=label+' unavailable ('+err.message+')';});
 }
 renderIndexChange('nifty.json','nifty50Change','nifty50Dates','Nifty 50');
-renderIndexChange('nifty500tri.json','nifty500Change','nifty500Dates','Nifty 500 TRI');
+renderIndexChange('nifty500.json','nifty500Change','nifty500Dates','Nifty 500');
 function setSummary(items){const up=items.filter(x=>x.pct>0),down=items.filter(x=>x.pct<0);$('up').textContent=up.length;$('down').textContent=down.length;$('upNames').textContent=up.map(x=>x.short).join(', ')||'—';$('downNames').textContent=down.map(x=>x.short).join(', ')||'—';const sorted=[...items].sort((a,b)=>b.pct-a.pct);const best=sorted[0],worst=sorted[sorted.length-1];if(best){$('best').textContent=pct(best.pct);$('bestName').textContent=best.short+' · '+best.latest.d;$('worst').textContent=pct(worst.pct);$('worstName').textContent=worst.short+' · '+worst.latest.d;}}
 function render(data){const items=[];funds.forEach(([id,name])=>{const raw=data[id];if(!Array.isArray(raw))return;const byDate=new Map();raw.forEach(x=>{if(x&&/^\d{4}-\d{2}-\d{2}$/.test(x.d)&&Number.isFinite(+x.n)&&+x.n>0)byDate.set(x.d,{d:x.d,n:+x.n});});const arr=[...byDate.values()].sort((a,b)=>a.d.localeCompare(b.d));if(arr.length<2)return;const latest=arr[arr.length-1],prev=arr[arr.length-2],delta=latest.n-prev.n,pct=delta/prev.n*100;items.push({id,name,short:name.replace(/^qSIF /,''),latest,prev,delta,pct});});
 if(!items.length){$('rows').innerHTML='<tr><td colspan="5">NAV data was loaded, but no scheme has at least two valid NAV records.</td></tr>';return;}
