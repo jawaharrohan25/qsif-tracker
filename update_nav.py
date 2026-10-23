@@ -182,7 +182,13 @@ def parse_nifty(text):
     for ts, c in zip(res["timestamp"], closes):
         if c is None or not (1000 < c < 200000):
             continue
-        d = (datetime.datetime.utcfromtimestamp(ts + off)).date().isoformat()
+        d = (
+    datetime.datetime.fromtimestamp(
+        ts + off, datetime.timezone.utc
+    )
+    .date()
+    .isoformat()
+)
         rows[d] = round(float(c), 2)
     return [{"d": d, "n": rows[d]} for d in sorted(rows)]
 
