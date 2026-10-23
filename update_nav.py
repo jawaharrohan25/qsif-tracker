@@ -73,7 +73,7 @@ FUNDS = {
 
 
 # A fund listed here can be absent from qsif.com (for example before its Direct plan is published) without failing the job.
-OPTIONAL = {"ex100"}
+OPTIONAL = {"ex100","aaa"}
 
 
 def _read(opener, req):
